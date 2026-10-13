@@ -67,7 +67,7 @@ worksheet = spreadsheet.worksheet("Hoja1")
 data = worksheet.get_all_values()
 
 if len(data) < 2:
-    raise ValueError("La pestaña 'hoja 1' no contiene datos.")
+    raise ValueError("La pestaña 'Hoja1' no contiene datos.")
 
 encabezados = [
     str(columna).replace("\ufeff", "").strip()
