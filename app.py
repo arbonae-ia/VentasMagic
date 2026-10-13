@@ -56,16 +56,20 @@ def cargar_y_limpiar_datos():
     ]
     
     credentials = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=scopes
-    )
-    
-    client = gspread.authorize(credentials)
-    spreadsheet = client.open("Base_Datos_Ventas")
+    st.secrets["gcp_service_account"],
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+)
+
+client = gspread.authorize(credentials)
+
+spreadsheet = client.open("Base_Datos_Ventas")
+
 worksheet = spreadsheet.worksheet("Hoja1")
 
 data = worksheet.get_all_values()
-
 if len(data) < 2:
     raise ValueError("La pestaña 'Hoja1' no contiene datos.")
 
