@@ -62,35 +62,33 @@ def cargar_y_limpiar_datos():
     
     client = gspread.authorize(credentials)
     spreadsheet = client.open("Base_Datos_Ventas")
-    worksheet = spreadsheet.worksheet("Hoja 1")
-    
-    data = worksheet.get_all_records()
-    df = pd.DataFrame(data)
-    
-    if 'Forma de Pago' not in df.columns:
-        df['Forma de Pago'] = 'No registrada'
-    
-    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-    
-    codigos_servicios = ['888912', '888923', '888916']
-    df['Tipo'] = np.where(df['Codigo Articulo'].astype(str).isin(codigos_servicios), 'Servicio', 'Producto')
-    
-    df['Valor Total'] = pd.to_numeric(df['Valor Total'], errors='coerce').fillna(0)
-    df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
-    
-    df['% IVA'] = df['% IVA'].astype(str).str.replace('*', '').astype(float)
-    df['Ventas con IVA'] = df['Valor Total'] * (1 + df['% IVA'] / 100)
-    
-    return df
+worksheet = spreadsheet.worksheet("Hoja 1")
 
-try:
-    df_base = cargar_y_limpiar_datos()
-    if df_base.empty:
-        st.error("⚠️ La hoja de Google Sheets 'Base_Datos_Ventas' está vacía o no tiene registros.")
-        st.stop()
-except Exception as e:
-    st.error(f"❌ Error al conectar con Google Sheets: {e}")
-    st.stop()
+data = worksheet.get_all_values()
+
+if len(data) < 2:
+    raise ValueError("La pestaña 'hoja 1' no contiene datos.")
+
+encabezados = [
+    str(columna).replace("\ufeff", "").strip()
+    for columna in data[0]
+]
+
+df = pd.DataFrame(
+    data[1:],
+    columns=encabezados
+)
+
+df.columns = (
+    df.columns
+    .astype(str)
+    .str.strip()
+)
+
+df["Fecha"] = pd.to_datetime(
+    df["Fecha"],
+    errors="coerce"
+)
 
 # ---------------------------------------------------
 # 3. BARRA LATERAL: FILTROS INTERACTIVOS
