@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import streamlit as st
-import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ---------------------------------------------------
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (UI/UX)
@@ -34,7 +34,6 @@ st.markdown("""
         font-size: 28px;
         font-weight: bold;
     }
-    /* Ocultar el menú de Streamlit por defecto para un look más limpio */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -46,66 +45,59 @@ COLOR_SECUNDARIO = "#38BDF8" # Azul claro
 COLOR_TERCIARIO = "#10B981" # Esmeralda
 COLORES_CAT = ["#2563EB", "#38BDF8", "#818CF8", "#4F46E5", "#0EA5E9", "#10B981"]
 
-import gspread
-from google.oauth2.service_account import Credentials
-
 # ---------------------------------------------------
 # 2. CARGA Y PREPARACIÓN DE DATOS (ETL - Google Sheets)
 # ---------------------------------------------------
-@st.cache_data(ttl=600) # Opcional: recarga los datos cada 10 minutos
+@st.cache_data(ttl=600)
 def cargar_y_limpiar_datos():
-    # Definir los permisos necesarios para Google Drive y Sheets
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Cargar las credenciales desde los secretos seguros de Streamlit
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=scopes
     )
     
-    # Autorizar el cliente de gspread
     client = gspread.authorize(credentials)
-    
-    # Abrir la hoja de cálculo por su nombre exacto
     spreadsheet = client.open("Base_Datos_Ventas")
-    worksheet = spreadsheet.sheet1  # O usa .worksheet("NombreDeTuPestaña") si prefieres una específica
+    worksheet = spreadsheet.sheet1
     
-    # Traer todos los datos a un DataFrame de pandas
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
     
-    # --- CORRECCIÓN: Evitar error si no existe 'Forma de Pago' ---
     if 'Forma de Pago' not in df.columns:
         df['Forma de Pago'] = 'No registrada'
-    # -------------------------------------------------------------
     
-    # Asegurar formato de fecha
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
     
-    # Crear columna Tipo (Producto vs Servicio)
     codigos_servicios = ['888912', '888923', '888916']
     df['Tipo'] = np.where(df['Codigo Articulo'].astype(str).isin(codigos_servicios), 'Servicio', 'Producto')
     
-    # Asegurar que Valor Total es numérico (Ventas sin IVA)
     df['Valor Total'] = pd.to_numeric(df['Valor Total'], errors='coerce').fillna(0)
     df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
     
-    # Limpiar IVA y calcular Ventas con IVA
     df['% IVA'] = df['% IVA'].astype(str).str.replace('*', '').astype(float)
     df['Ventas con IVA'] = df['Valor Total'] * (1 + df['% IVA'] / 100)
     
     return df
 
+try:
+    df_base = cargar_y_limpiar_datos()
+    if df_base.empty:
+        st.error("⚠️ La hoja de Google Sheets 'Base_Datos_Ventas' está vacía o no tiene registros.")
+        st.stop()
+except Exception as e:
+    st.error(f"❌ Error al conectar con Google Sheets: {e}")
+    st.stop()
+
 # ---------------------------------------------------
 # 3. BARRA LATERAL: FILTROS INTERACTIVOS
 # ---------------------------------------------------
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3061/3061341.png", width=60) # Logo genérico
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3061/3061341.png", width=60)
 st.sidebar.title("Filtros de Análisis")
 
-# Filtros de Fecha
 fecha_min = df_base['Fecha'].min().date()
 fecha_max = df_base['Fecha'].max().date()
 fechas = st.sidebar.date_input("Rango de Fechas", [fecha_min, fecha_max], min_value=fecha_min, max_value=fecha_max)
@@ -114,7 +106,6 @@ df_filtrado = df_base.copy()
 if len(fechas) == 2:
     df_filtrado = df_filtrado[(df_filtrado['Fecha'].dt.date >= fechas[0]) & (df_filtrado['Fecha'].dt.date <= fechas[1])]
 
-# Filtros Categóricos
 ciudades = st.sidebar.multiselect("Ciudad", options=df_filtrado["Ciudad"].unique())
 if ciudades: df_filtrado = df_filtrado[df_filtrado["Ciudad"].isin(ciudades)]
 
@@ -130,13 +121,10 @@ if tipos: df_filtrado = df_filtrado[df_filtrado["Tipo"].isin(tipos)]
 # ---------------------------------------------------
 # 4. CÁLCULO DE KPIs
 # ---------------------------------------------------
-# Actividad Comercial
 facturas_unicas = df_filtrado["Factura #"].nunique()
 clientes_unicos = df_filtrado["Cliente"].nunique()
-lineas_facturadas = len(df_filtrado)
 cantidad_vendida = df_filtrado["Cantidad"].sum()
 
-# Facturación
 ventas_sin_iva = df_filtrado["Valor Total"].sum()
 ventas_con_iva = df_filtrado["Ventas con IVA"].sum()
 ticket_promedio = ventas_sin_iva / facturas_unicas if facturas_unicas > 0 else 0
@@ -148,7 +136,6 @@ precio_promedio_mts = ventas_sin_iva / cantidad_vendida if cantidad_vendida > 0 
 st.title("Resumen Ejecutivo de Ventas")
 st.markdown("---")
 
-# FILA 1: KPIs Principales (HTML Inyectado para diseño)
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 def mostrar_kpi(col, titulo, valor, prefix="", sufix=""):
@@ -168,7 +155,6 @@ mostrar_kpi(col6, "Precio Prom. MTS", f"{precio_promedio_mts:,.0f}", prefix="$")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# FILA 2: Tendencia de Ventas
 st.subheader("📈 Tendencia de Ventas en el Tiempo")
 ventas_diarias = df_filtrado.groupby('Fecha')['Valor Total'].sum().reset_index()
 fig_trend = px.line(ventas_diarias, x='Fecha', y='Valor Total', markers=True, 
@@ -180,7 +166,6 @@ st.plotly_chart(fig_trend, use_container_width=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# FILA 3: Ciudad y Vendedor
 col_c, col_v = st.columns(2)
 
 with col_c:
@@ -200,7 +185,6 @@ with col_v:
     fig_vend.update_layout(plot_bgcolor='rgba(0,0,0,0)', xaxis_title="Ventas (Sin IVA)", yaxis_title="")
     st.plotly_chart(fig_vend, use_container_width=True)
 
-# FILA 4: Productos y Composición
 col_p, col_comp = st.columns(2)
 
 with col_p:
@@ -231,7 +215,6 @@ with col_comp:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# FILA 5: Pestañas de Tablas Detalladas (Ahorra espacio vertical)
 st.subheader("📋 Análisis Detallado")
 tab1, tab2, tab3 = st.tabs(["👥 Ventas por Cliente", "💳 Forma de Pago", "🧾 Detalle de Facturas (Líneas)"])
 
@@ -239,8 +222,6 @@ with tab1:
     v_cliente = df_filtrado.groupby(['Cliente', 'Ciudad']).agg({'Valor Total':'sum', 'Factura #':'nunique'}).reset_index().sort_values('Valor Total', ascending=False)
     v_cliente.rename(columns={'Valor Total': 'Ventas', 'Factura #': 'Facturas'}, inplace=True)
     v_cliente['Ticket Promedio'] = v_cliente['Ventas'] / v_cliente['Facturas']
-    
-    # Formato visual para la tabla
     st.dataframe(v_cliente.style.format({'Ventas': '${:,.0f}', 'Ticket Promedio': '${:,.0f}'}), use_container_width=True)
 
 with tab2:
