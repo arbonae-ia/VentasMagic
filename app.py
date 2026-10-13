@@ -54,6 +54,11 @@ def cargar_y_limpiar_datos():
     # Leer el Excel
     df = pd.read_excel("Base_Datos_Ventas.xlsx")
     
+    # --- CORRECCIÓN: Evitar error si no existe 'Forma de Pago' ---
+    if 'Forma de Pago' not in df.columns:
+        df['Forma de Pago'] = 'No registrada'
+    # -------------------------------------------------------------
+    
     # Asegurar formato de fecha
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
     
