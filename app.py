@@ -51,16 +51,13 @@ COLORES_CAT = ["#2563EB", "#38BDF8", "#818CF8", "#4F46E5", "#0EA5E9", "#10B981"]
 @st.cache_data(ttl=600)
 def cargar_y_limpiar_datos():
     scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
-    credentials = Credentials.from_service_account_info(
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+credentials = Credentials.from_service_account_info(
     st.secrets["gcp_service_account"],
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    scopes=scopes
 )
 
 client = gspread.authorize(credentials)
