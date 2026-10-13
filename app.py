@@ -62,7 +62,7 @@ def cargar_y_limpiar_datos():
     
     client = gspread.authorize(credentials)
     spreadsheet = client.open("Base_Datos_Ventas")
-worksheet = spreadsheet.worksheet("Hoja 1")
+worksheet = spreadsheet.worksheet("Hoja1")
 
 data = worksheet.get_all_values()
 
