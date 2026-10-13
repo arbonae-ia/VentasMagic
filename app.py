@@ -46,13 +46,36 @@ COLOR_SECUNDARIO = "#38BDF8" # Azul claro
 COLOR_TERCIARIO = "#10B981" # Esmeralda
 COLORES_CAT = ["#2563EB", "#38BDF8", "#818CF8", "#4F46E5", "#0EA5E9", "#10B981"]
 
+import gspread
+from google.oauth2.service_account import Credentials
+
 # ---------------------------------------------------
-# 2. CARGA Y PREPARACIÓN DE DATOS (ETL)
+# 2. CARGA Y PREPARACIÓN DE DATOS (ETL - Google Sheets)
 # ---------------------------------------------------
-@st.cache_data
+@st.cache_data(ttl=600) # Opcional: recarga los datos cada 10 minutos
 def cargar_y_limpiar_datos():
-    # Leer el Excel
-    df = pd.read_excel("Base_Datos_Ventas.xlsx")
+    # Definir los permisos necesarios para Google Drive y Sheets
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    
+    # Cargar las credenciales desde los secretos seguros de Streamlit
+    credentials = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scopes
+    )
+    
+    # Autorizar el cliente de gspread
+    client = gspread.authorize(credentials)
+    
+    # Abrir la hoja de cálculo por su nombre exacto
+    spreadsheet = client.open("Base_Datos_Ventas")
+    worksheet = spreadsheet.sheet1  # O usa .worksheet("NombreDeTuPestaña") si prefieres una específica
+    
+    # Traer todos los datos a un DataFrame de pandas
+    data = worksheet.get_all_records()
+    df = pd.DataFrame(data)
     
     # --- CORRECCIÓN: Evitar error si no existe 'Forma de Pago' ---
     if 'Forma de Pago' not in df.columns:
@@ -63,7 +86,6 @@ def cargar_y_limpiar_datos():
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
     
     # Crear columna Tipo (Producto vs Servicio)
-    # Consideramos Servicios: 888912 (Sublimación), 888923 (Corte Laser), 888916 (Manipulación)
     codigos_servicios = ['888912', '888923', '888916']
     df['Tipo'] = np.where(df['Codigo Articulo'].astype(str).isin(codigos_servicios), 'Servicio', 'Producto')
     
@@ -76,12 +98,6 @@ def cargar_y_limpiar_datos():
     df['Ventas con IVA'] = df['Valor Total'] * (1 + df['% IVA'] / 100)
     
     return df
-
-try:
-    df_base = cargar_y_limpiar_datos()
-except Exception as e:
-    st.error(f"Error al cargar el archivo de Excel: {e}")
-    st.stop()
 
 # ---------------------------------------------------
 # 3. BARRA LATERAL: FILTROS INTERACTIVOS
