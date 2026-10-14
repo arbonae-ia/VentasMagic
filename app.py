@@ -1,98 +1,258 @@
 import io
 import re
 from datetime import datetime
+from pathlib import Path
 
 import gspread
-import numpy as np
 import pandas as pd
 import pdfplumber
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 from google.oauth2.service_account import Credentials
+from PIL import Image
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
+# CONFIGURACIÓN DE PÁGINA Y BRANDING
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Magic Print Analytics", page_icon="📊", layout="wide")
 
-st.markdown("""
-<style>
-/* Estilos generales y tipografía */
-.main-header {
-    background: #ffffff;
-    padding: 20px 25px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(30, 60, 90, 0.06);
-    border-left: 6px solid #2563EB;
-    margin-bottom: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.main-title {
-    font-size: 32px;
-    font-weight: 700;
-    color: #0F172A;
-    margin: 0;
-}
-.main-subtitle {
-    color: #64748B;
-    font-size: 14px;
-    margin-top: 4px;
-}
-.section-title {
-    color: #0F172A;
-    font-size: 20px;
-    font-weight: 700;
-    margin: 30px 0 15px 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "magic_print_logo.jpg"
+LOGO_FALLBACK = "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=400&q=80"
 
-/* Tarjetas KPI mejoradas */
-.kpi-card {
-    background: #ffffff;
-    border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 16px 18px;
-    min-height: 105px;
-    box-shadow: 0 2px 6px rgba(30, 60, 90, 0.04);
-    transition: all 0.3s ease;
-}
-.kpi-card:hover {
-    box-shadow: 0 4px 12px rgba(30, 60, 90, 0.08);
-    transform: translateY(-2px);
-}
-.kpi-card.blue { border-left: 4px solid #2563EB; }
-.kpi-card.green { border-left: 4px solid #10B981; }
-.kpi-card.purple { border-left: 4px solid #8B5CF6; }
-.kpi-card.orange { border-left: 4px solid #F59E0B; }
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
-.kpi-title {
-    color: #64748B;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-    letter-spacing: 0.5px;
-}
-.kpi-value {
-    color: #0F172A;
-    font-size: 24px;
-    font-weight: 700;
-}
-.small-note {
-    color: #64748B;
-    font-size: 12px;
-    margin-top: 4px;
-}
+    :root {
+        --bg: #f3f7fb;
+        --panel: rgba(255,255,255,0.9);
+        --card: #ffffff;
+        --line: #dfeaf5;
+        --text: #0f172a;
+        --muted: #64748b;
+        --blue: #2563eb;
+        --blue-soft: #dfeeff;
+        --green: #10b981;
+        --green-soft: #dffcf3;
+        --purple: #8b5cf6;
+        --purple-soft: #f1e9ff;
+        --orange: #f59e0b;
+        --orange-soft: #fff0d8;
+        --pink: #ff4fd8;
+        --cyan: #2dd4bf;
+        --shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
+        --radius: 18px;
+    }
 
-/* Ocultar elementos predeterminados molestos */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+    html, body, [data-testid="stAppViewContainer"], .main {
+        background: linear-gradient(180deg, #eef5ff 0%, #f8fafd 20%, #f5f7fb 100%);
+        color: var(--text);
+        font-family: 'Inter', sans-serif;
+    }
+
+    .app-shell {
+        padding-top: 0.5rem;
+    }
+
+    .topbar {
+        background: linear-gradient(135deg, rgba(15,23,42,0.96) 0%, rgba(37,99,235,0.92) 48%, rgba(139,92,246,0.94) 100%);
+        border-radius: 22px;
+        padding: 18px 22px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255,255,255,0.18);
+        margin-bottom: 1.3rem;
+    }
+
+    .brand-title {
+        font-size: clamp(1.6rem, 2vw, 2.4rem);
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+        margin: 0;
+    }
+
+    .brand-subtitle {
+        color: rgba(255,255,255,0.75);
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin-top: 0.3rem;
+    }
+
+    .page-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.45rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.18);
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .section-title {
+        margin: 0.9rem 0 0.9rem 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -0.02em;
+    }
+
+    .kpi-card {
+        background: rgba(255,255,255,0.9);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1rem 1rem 0.8rem 1rem;
+        min-height: 132px;
+        box-shadow: 0 8px 18px rgba(15,23,42,0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 26px rgba(37, 99, 235, 0.08);
+    }
+
+    .kpi-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+    }
+
+    .kpi-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        font-weight: 700;
+        background: var(--blue-soft);
+        color: var(--blue);
+    }
+
+    .kpi-icon.green { background: var(--green-soft); color: var(--green); }
+    .kpi-icon.purple { background: var(--purple-soft); color: var(--purple); }
+    .kpi-icon.orange { background: var(--orange-soft); color: var(--orange); }
+    .kpi-icon.pink { background: rgba(255, 79, 216, 0.12); color: var(--pink); }
+
+    .kpi-value {
+        font-size: clamp(1.5rem, 2vw, 2.1rem);
+        line-height: 1.1;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -0.04em;
+        margin-bottom: 0.55rem;
+    }
+
+    .kpi-trend {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 600;
+        margin-top: 0.25rem;
+    }
+
+    .panel {
+        background: rgba(255,255,255,0.82);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: 0 8px 18px rgba(15,23,42,0.04);
+        padding: 1rem;
+    }
+
+    div[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(11,18,32,0.98) 0%, rgba(15,23,42,0.98) 100%);
+        border-right: 1px solid rgba(255,255,255,0.06);
+    }
+
+    div[data-testid="stSidebar"] > div {
+        padding: 1rem 0.9rem 1rem 0.9rem;
+    }
+
+    [data-testid="stSidebarUserContent"], [data-testid="stSidebarNav"] {
+        background: transparent;
+    }
+
+    .sidebar-title {
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0.5rem 0 0.8rem 0;
+    }
+
+    .sidebar-sub {
+        color: rgba(255,255,255,0.7);
+        font-size: 0.78rem;
+        margin-bottom: 0.7rem;
+    }
+
+    .stFileUploader label, .stMultiSelect label, .stDateInput label {
+        color: rgba(255,255,255,0.9) !important;
+        font-weight: 600;
+    }
+
+    .stButton > button {
+        background: linear-gradient(135deg, #2563eb, #8b5cf6);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-weight: 700;
+        padding: 0.6rem 1rem;
+    }
+
+    .stSuccess, .stWarning, .stInfo {
+        border-radius: 12px;
+        border: none;
+    }
+
+    [data-testid="stDataFrame"] {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(148,163,184,0.22);
+    }
+
+    .metric-box {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 0.8rem 0.9rem;
+    }
+
+    .metric-box .title {
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+    }
+
+    .metric-box .value {
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: var(--text);
+        letter-spacing: -0.03em;
+    }
+
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 NOMBRE_ARCHIVO = "Base_Datos_Ventas"
 NOMBRE_PESTANA = "Hoja1"
@@ -116,9 +276,38 @@ MESES_PDF = {
 
 CODIGOS_SERVICIO = {"888912", "888923", "888916"}
 
-# -----------------------------------------------------------------------------
-# FUNCIONES DE CONEXIÓN Y ETL
-# -----------------------------------------------------------------------------
+
+def cargar_logo():
+    if LOGO_PATH.exists():
+        return Image.open(LOGO_PATH)
+    return None
+
+
+def sparkline(values, color="#2563eb"):
+    y = list(values)
+    if not y:
+        y = [0]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=list(range(len(y))),
+        y=y,
+        mode="lines",
+        line=dict(color=color, width=2),
+        hoverinfo="skip",
+        showlegend=False,
+    ))
+    fig.update_layout(
+        width=160,
+        height=50,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False, showgrid=False, zeroline=False),
+        yaxis=dict(visible=False, showgrid=False, zeroline=False),
+    )
+    return fig
+
+
 @st.cache_resource
 def conectar_hoja():
     try:
@@ -131,13 +320,16 @@ def conectar_hoja():
         st.error(f"No fue posible conectar con Google Sheets: {error}")
         return None
 
+
 def limpiar_texto(valor):
     if valor is None:
         return ""
     return re.sub(r"\s+", " ", str(valor).replace("\xa0", " ")).strip()
 
+
 def limpiar_nit(valor):
     return re.sub(r"[^0-9]", "", limpiar_texto(valor))
+
 
 def convertir_numero(valor):
     texto = limpiar_texto(valor).replace("$", "").replace(" ", "")
@@ -145,18 +337,24 @@ def convertir_numero(valor):
         return 0.0
     try:
         if "," in texto and "." in texto:
-            texto = (texto.replace(".", "").replace(",", ".")
-                     if texto.rfind(",") > texto.rfind(".")
-                     else texto.replace(",", ""))
+            texto = (
+                texto.replace(".", "").replace(",", ".")
+                if texto.rfind(",") > texto.rfind(".")
+                else texto.replace(",", "")
+            )
         elif "," in texto:
             partes = texto.split(",")
-            texto = (texto.replace(".", "").replace(",", ".")
-                     if len(partes[-1]) == 2 else texto.replace(",", ""))
+            texto = (
+                texto.replace(".", "").replace(",", ".")
+                if len(partes[-1]) == 2
+                else texto.replace(",", "")
+            )
         elif "." in texto and len(texto.split(".")[-1]) != 2:
             texto = texto.replace(".", "")
         return float(texto)
     except Exception:
         return 0.0
+
 
 def convertir_fecha_pdf(fecha):
     partes = limpiar_texto(fecha).replace("−", "-").replace("–", "-").split("-")
@@ -170,8 +368,10 @@ def convertir_fecha_pdf(fecha):
     except Exception:
         return ""
 
+
 def clasificar_tipo_venta(codigo):
     return "Servicio" if limpiar_texto(codigo) in CODIGOS_SERVICIO else "Bases Textiles"
+
 
 def extraer_datos_pdf(archivo_pdf):
     registros = []
@@ -230,6 +430,7 @@ def extraer_datos_pdf(archivo_pdf):
         raise ValueError("No se encontraron líneas de productos o servicios.")
     return registros
 
+
 def obtener_informacion_duplicados(hoja, registros_pdf):
     datos = hoja.get_all_values()
     facturas_pdf = {limpiar_texto(r[0]) for r in registros_pdf}
@@ -251,20 +452,25 @@ def obtener_informacion_duplicados(hoja, registros_pdf):
         "facturas_nuevas": facturas_pdf - existentes,
     }
 
+
 def agregar_facturas_nuevas(hoja, registros_pdf, facturas_existentes):
     nuevos = [r for r in registros_pdf if limpiar_texto(r[0]) not in facturas_existentes]
     if nuevos:
         hoja.append_rows(nuevos, value_input_option="USER_ENTERED")
     return nuevos
 
+
 def reemplazar_facturas(hoja, registros_pdf, filas_a_borrar):
     for fila in sorted(filas_a_borrar, reverse=True):
         hoja.delete_rows(fila)
     hoja.append_rows(registros_pdf, value_input_option="USER_ENTERED")
 
+
 @st.cache_data(ttl=30)
 def cargar_datos():
     hoja = conectar_hoja()
+    if hoja is None:
+        return pd.DataFrame(columns=COLUMNAS)
     datos = hoja.get_all_values()
     if not datos:
         return pd.DataFrame(columns=COLUMNAS)
@@ -291,6 +497,7 @@ def cargar_datos():
         df["Tipo de Venta"] = df["Codigo Articulo"].apply(clasificar_tipo_venta)
     return df
 
+
 def aplicar_filtro_lista(dataframe, columna, titulo):
     if columna not in dataframe.columns:
         return dataframe
@@ -301,6 +508,7 @@ def aplicar_filtro_lista(dataframe, columna, titulo):
     if seleccionados:
         dataframe = dataframe[dataframe[columna].astype(str).isin(seleccionados)]
     return dataframe
+
 
 # -----------------------------------------------------------------------------
 # ESTADOS DE SESIÓN
@@ -313,19 +521,35 @@ if "uploader_version" not in st.session_state:
     st.session_state["uploader_version"] = 0
 
 # -----------------------------------------------------------------------------
-# ENCABEZADO PRINCIPAL CON LOGOTIPO
+# HEADER / BRANDING
 # -----------------------------------------------------------------------------
-st.markdown("""
-<div class="main-header">
-    <div>
-        <div class="main-title">Magic Print Analytics</div>
-        <div class="main-subtitle">Seguimiento inteligente de ventas, facturación y análisis comercial</div>
-    </div>
-    <div>
-        <img src="https://cdn-icons-png.flaticon.com/512/3061/3061341.png" width="55">
-    </div>
-</div>
-""", unsafe_allow_html=True)
+logo = cargar_logo()
+
+with st.container():
+    cols = st.columns([1.1, 2.9, 0.8])
+    with cols[0]:
+        if logo is not None:
+            st.image(logo, width=180)
+        else:
+            st.markdown(
+                """
+                <div style="
+                    width: 180px; height: 70px; border-radius: 16px;
+                    background: linear-gradient(135deg, #1e293b, #7c3aed 55%, #f472b6);
+                    display:flex; align-items:center; justify-content:center;
+                    color: white; font-size: 1.3rem; font-weight: 900; letter-spacing: 0.1em;
+                    box-shadow: 0 18px 30px rgba(15,23,42,0.18);
+                ">MP</div>
+                """,
+                unsafe_allow_html=True,
+            )
+    with cols[1]:
+        st.markdown('<div class="brand-title">Magic Print Analytics</div>', unsafe_allow_html=True)
+        st.markdown('<div class="brand-subtitle">Seguimiento inteligente de ventas, facturación y análisis comercial</div>', unsafe_allow_html=True)
+    with cols[2]:
+        st.markdown('<div class="page-tag">LIVE</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="topbar" style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
 
 if st.session_state["mensaje_carga"]:
     st.success(st.session_state.pop("mensaje_carga"))
@@ -335,10 +559,11 @@ if hoja is None:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# BARRA LATERAL (CARGA DE PDF Y FILTROS)
+# SIDEBAR / PANEL DE CARGA Y FILTROS
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.header("Cargar facturas PDF")
+    st.markdown('<div class="sidebar-title">Cargar facturas</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-sub">Sube un PDF para agregar registros y actualizar la base.</div>', unsafe_allow_html=True)
     archivo_pdf = st.file_uploader(
         "Selecciona un archivo PDF",
         type=["pdf"],
@@ -351,12 +576,14 @@ with st.sidebar:
                 with st.spinner("Procesando el PDF..."):
                     st.session_state["registros_pdf"] = extraer_datos_pdf(archivo_pdf)
                 st.rerun()
-            except Exception as error:
+            except Exception:
                 st.error(
-                    "El PDF no corresponde a una factura válida: "
-                    "no se encontraron productos o servicios. "
-                    "Revisa el archivo e intenta nuevamente."
+                    "El PDF no corresponde a una factura válida. Revisa el archivo e intenta nuevamente."
                 )
+
+    st.markdown("---")
+    st.markdown('<div class="sidebar-title">Filtros</div>', unsafe_allow_html=True)
+    st.caption("Aplica segmentación de análisis por ciudad, vendedor, cliente y tipo de venta.")
 
 registros_pdf = st.session_state["registros_pdf"]
 if registros_pdf:
@@ -426,35 +653,42 @@ if registros_pdf:
             except Exception as error:
                 st.error(f"No fue posible cargar las facturas: {error}")
 
+# -----------------------------------------------------------------------------
+# CARGA DE DATOS Y FILTROS
+# -----------------------------------------------------------------------------
 df = cargar_datos()
 if df.empty:
     st.info("Google Sheets está conectado, pero todavía no contiene registros.")
     st.stop()
 
 st.sidebar.markdown("---")
-st.sidebar.header("Filtros de análisis")
-st.sidebar.caption("Puedes seleccionar uno o varios valores en cada lista.")
+with st.sidebar:
+    if "Fecha" in df.columns and not df["Fecha"].dropna().empty:
+        fecha_min = df["Fecha"].min().date()
+        fecha_max = df["Fecha"].max().date()
+        rango = st.date_input("Rango de fechas", (fecha_min, fecha_max), min_value=fecha_min, max_value=fecha_max)
+        if isinstance(rango, tuple) and len(rango) == 2:
+            df = df[(df["Fecha"].dt.date >= rango[0]) & (df["Fecha"].dt.date <= rango[1])]
 
-if "Fecha" in df.columns and not df["Fecha"].dropna().empty:
-    fecha_min = df["Fecha"].min().date()
-    fecha_max = df["Fecha"].max().date()
-    rango = st.sidebar.date_input("Rango de fechas", (fecha_min, fecha_max), min_value=fecha_min, max_value=fecha_max)
-    if isinstance(rango, tuple) and len(rango) == 2:
-        df = df[(df["Fecha"].dt.date >= rango[0]) & (df["Fecha"].dt.date <= rango[1])]
-
-for columna, titulo in [("Ciudad", "Ciudad"), ("Vendedor", "Vendedor"), ("Cliente", "Cliente"), ("Unidad", "Unidad"), ("Tipo de Venta", "Tipo de venta")]:
-    df = aplicar_filtro_lista(df, columna, titulo)
+    for columna, titulo in [
+        ("Ciudad", "Ciudad"),
+        ("Vendedor", "Vendedor"),
+        ("Cliente", "Cliente"),
+        ("Unidad", "Unidad"),
+        ("Tipo de Venta", "Tipo de venta")
+    ]:
+        df = aplicar_filtro_lista(df, columna, titulo)
 
 # -----------------------------------------------------------------------------
-# CÁLCULOS DE MÉTRICAS Y KPIS
+# KPI CARDS Y CÁLCULOS
 # -----------------------------------------------------------------------------
 ventas = df["Valor Total"].sum()
 facturas = df["Factura #"].nunique()
 clientes = df["Cliente"].nunique()
 cantidad = df["Cantidad"].sum()
 ticket = ventas / facturas if facturas else 0
-
 ventas_dia = df.groupby("Fecha", as_index=False)["Valor Total"].sum().dropna()
+
 if ventas_dia.empty:
     dia_mayor, valor_mayor, dia_menor, valor_menor = "Sin datos", 0, "Sin datos", 0
 else:
@@ -463,68 +697,132 @@ else:
     dia_mayor, valor_mayor = mayor["Fecha"].strftime("%d/%m/%Y"), mayor["Valor Total"]
     dia_menor, valor_menor = menor["Fecha"].strftime("%d/%m/%Y"), menor["Valor Total"]
 
-# -----------------------------------------------------------------------------
-# RENDERIZADO DE INDICADORES COMERCIALES (KPI CARDS)
-# -----------------------------------------------------------------------------
-st.markdown('<div class="section-title">📊 Indicadores comerciales</div>', unsafe_allow_html=True)
-kpis = [
-    ("Ventas sin IVA", f"${ventas:,.0f}", "blue"),
-    ("Facturas realizadas", f"{facturas:,.0f}", "green"),
-    ("Clientes atendidos", f"{clientes:,.0f}", "purple"),
-    ("Cantidad vendida", f"{cantidad:,.0f}", "orange"),
-    ("Ticket promedio", f"${ticket:,.0f}", "blue"),
-]
-cols = st.columns(5)
-for col, (titulo, valor, color) in zip(cols, kpis):
-    with col:
-        st.markdown(f'<div class="kpi-card {color}"><div class="kpi-title">{titulo}</div><div class="kpi-value">{valor}</div></div>', unsafe_allow_html=True)
+forma_pago = df["Forma de Pago"].fillna("No registrado")
+tipo_venta = df["Tipo de Venta"].fillna("Sin clasificación")
 
-# Días destacados
+kpi_data = [
+    ("Ventas sin IVA", ventas, "blue", "💰"),
+    ("Facturas realizadas", facturas, "green", "🧾"),
+    ("Clientes atendidos", clientes, "purple", "👥"),
+    ("Cantidad vendida", cantidad, "orange", "📦"),
+    ("Ticket promedio", ticket, "pink", "📈"),
+]
+
+st.markdown('<div class="section-title">📊 Indicadores comerciales</div>', unsafe_allow_html=True)
+cols = st.columns(5)
+for idx, (titulo, valor, color, icono) in enumerate(kpi_data):
+    with cols[idx]:
+        with st.container():
+            valores_spark = (
+                df.groupby("Fecha", as_index=False)["Valor Total"].sum().sort_values("Fecha")["Valor Total"].tail(12).tolist()
+                if "Fecha" in df.columns and not df.empty else [0]
+            )
+            st.markdown(
+                f"""
+                <div class="kpi-card">
+                    <div class="kpi-label">
+                        <span>{titulo}</span>
+                        <span class="kpi-icon {color}">{icono}</span>
+                    </div>
+                    <div class="kpi-value">{f'$ {valor:,.0f}' if 'Ventas' in titulo or 'Ticket' in titulo else f'{valor:,.0f}'}</div>
+                    <div class="kpi-trend">{titulo}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(sparkline(valores_spark, color={"blue": "#2563eb", "green": "#10b981", "purple": "#8b5cf6", "orange": "#f59e0b", "pink": "#ff4fd8"}[color]), use_container_width=True, config={"displayModeBar": False})
+
+# -----------------------------------------------------------------------------
+# DESTACADOS
+# -----------------------------------------------------------------------------
 st.markdown('<div class="section-title">⭐ Días destacados</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    st.markdown(f'<div class="kpi-card green"><div class="kpi-title">Día de mayor venta</div><div class="kpi-value">{dia_mayor}</div><div class="small-note">${valor_mayor:,.0f} vendidos</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="title">Día de mayor venta</div>
+            <div class="value">{dia_mayor}</div>
+            <div class="small-note">${valor_mayor:,.0f} vendidos</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 with c2:
-    st.markdown(f'<div class="kpi-card orange"><div class="kpi-title">Día de menor venta</div><div class="kpi-value">{dia_menor}</div><div class="small-note">${valor_menor:,.0f} vendidos</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="metric-box">
+            <div class="title">Día de menor venta</div>
+            <div class="value">{dia_menor}</div>
+            <div class="small-note">${valor_menor:,.0f} vendidos</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def mostrar_grafico(figura):
     figura.update_layout(
-        height=380,
-        margin=dict(l=20, r=20, t=50, b=20),
+        height=360,
+        margin=dict(l=20, r=20, t=35, b=15),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="sans-serif", size=12, color="#334155")
+        font=dict(family="Inter, sans-serif", size=11, color="#334155"),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
     )
-    st.plotly_chart(figura, use_container_width=True)
+    st.plotly_chart(figura, use_container_width=True, config={"displayModeBar": False})
 
 # -----------------------------------------------------------------------------
-# BLOQUE DE GRÁFICOS Y ANÁLISIS COMERCIAL
+# BLOQUE DE GRÁFICOS
 # -----------------------------------------------------------------------------
-st.markdown('<div class="section-title">📈 Análisis comercial detallado</div>', unsafe_allow_html=True)
-
+st.markdown('<div class="section-title">📈 Análisis comercial</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
-    with st.container(border=True):
+    with st.container():
         datos = df.groupby("Fecha", as_index=False)["Valor Total"].sum().sort_values("Fecha")
-        mostrar_grafico(px.line(datos, x="Fecha", y="Valor Total", markers=True, title="Evolución diaria de ventas"))
+        mostrar_grafico(px.line(datos, x="Fecha", y="Valor Total", markers=True, line_shape="spline", title="Evolución diaria de ventas"))
 with c2:
-    with st.container(border=True):
+    with st.container():
         datos = df.groupby("Ciudad", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False)
         mostrar_grafico(px.bar(datos, x="Ciudad", y="Valor Total", color="Ciudad", title="Ventas por ciudad"))
 
 c1, c2 = st.columns(2)
 with c1:
-    with st.container(border=True):
+    with st.container():
         datos = df.groupby("Vendedor", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False)
         mostrar_grafico(px.bar(datos, x="Valor Total", y="Vendedor", orientation="h", color="Vendedor", title="Desempeño por vendedor"))
 with c2:
-    with st.container(border=True):
-        datos = df.groupby("Descripcion", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False).head(15)
-        mostrar_grafico(px.bar(datos, x="Valor Total", y="Descripcion", orientation="h", color="Valor Total", title="Top productos y servicios más vendidos"))
+    with st.container():
+        datos = df.groupby("Tipo de Venta", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False)
+        mostrar_grafico(px.pie(datos, values="Valor Total", names="Tipo de Venta", title="Participación por tipo de venta", hole=0.45))
 
 # -----------------------------------------------------------------------------
-# TABLA DE DETALLE
+# TABLA DETALLADA
 # -----------------------------------------------------------------------------
 st.markdown('<div class="section-title">📋 Detalle de facturación</div>', unsafe_allow_html=True)
-with st.container(border=True):
+with st.container():
     st.dataframe(df, use_container_width=True, hide_index=True)
+
+# -----------------------------------------------------------------------------
+# RESUMEN DE FORMA DE PAGO / TIPO DE VENTA
+# -----------------------------------------------------------------------------
+forma = df.groupby("Forma de Pago", dropna=False)["Valor Total"].sum().reset_index().sort_values("Valor Total", ascending=False)
+tipo = df.groupby("Tipo de Venta", dropna=False)["Valor Total"].sum().reset_index().sort_values("Valor Total", ascending=False)
+
+if not forma.empty or not tipo.empty:
+    st.markdown('<div class="section-title">💡 Resumen comercial</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        if not forma.empty:
+            with st.container():
+                st.subheader("Forma de pago")
+                mostrar_grafico(px.bar(forma, x="Forma de Pago", y="Valor Total", color="Forma de Pago", title="Ventas por forma de pago"))
+    with c2:
+        if not tipo.empty:
+            with st.container():
+                st.subheader("Tipo de venta")
+                mostrar_grafico(px.bar(tipo, x="Tipo de Venta", y="Valor Total", color="Tipo de Venta", title="Ventas por tipo de venta"))
+
+
+# # final newline
