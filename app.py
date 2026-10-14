@@ -1,19 +1,20 @@
 import io
 import re
+from datetime import datetime
 
+import gspread
 import numpy as np
 import pandas as pd
 import pdfplumber
 import plotly.express as px
 import streamlit as st
-import gspread
 
 from google.oauth2.service_account import Credentials
 
 
-# =====================================================
+# ============================================================
 # CONFIGURACIÓN
-# =====================================================
+# ============================================================
 
 st.set_page_config(
     page_title="Magic Print Analytics",
@@ -21,19 +22,10 @@ st.set_page_config(
     layout="wide"
 )
 
-COLOR_PRINCIPAL = "#2563EB"
-COLOR_SECUNDARIO = "#38BDF8"
-COLOR_TERCIARIO = "#10B981"
-
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
 NOMBRE_ARCHIVO = "Base_Datos_Ventas"
 NOMBRE_PESTANA = "Hoja1"
 
-COLUMNAS_GOOGLE_SHEETS = [
+COLUMNAS = [
     "Factura #",
     "Fecha",
     "Cliente",
@@ -50,1293 +42,1037 @@ COLUMNAS_GOOGLE_SHEETS = [
     "Forma de Pago"
 ]
 
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+
+# ============================================================
+# ESTILOS
+# ============================================================
 
 st.markdown(
     """
     <style>
-    .kpi-card {
-        background-color: #ffffff;
-        border-radius: 10px;
-        padding: 18px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border-left: 5px solid #2563EB;
-        margin-bottom: 20px;
-    }
+        .main-title {
+            font-size: 42px;
+            font-weight: 700;
+            color: #19324d;
+        }
 
-    .kpi-title {
-        color: #64748B;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-bottom: 5px;
-    }
+        .metric-card {
+            background-color: #f5f7fa;
+            padding: 18px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #e1e5ea;
+        }
 
-    .kpi-value {
-        color: #0F172A;
-        font-size: 25px;
-        font-weight: bold;
-    }
+        .metric-title {
+            color: #687684;
+            font-size: 14px;
+        }
 
-    #MainMenu {
-        visibility: hidden;
-    }
-
-    footer {
-        visibility: hidden;
-    }
+        .metric-value {
+            color: #19324d;
+            font-size: 25px;
+            font-weight: 700;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 
-# =====================================================
+# ============================================================
 # CONEXIÓN CON GOOGLE SHEETS
-# =====================================================
+# ============================================================
 
 @st.cache_resource
 def conectar_hoja():
-    credentials = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=SCOPES
-    )
+    try:
+        credentials = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=SCOPES
+        )
 
-    client = gspread.authorize(credentials)
+        cliente = gspread.authorize(credentials)
+        archivo = cliente.open(NOMBRE_ARCHIVO)
+        hoja = archivo.worksheet(NOMBRE_PESTANA)
 
-    spreadsheet = client.open(NOMBRE_ARCHIVO)
+        return hoja
 
-    worksheet = spreadsheet.worksheet(NOMBRE_PESTANA)
+    except Exception as error:
+        st.error(f"No fue posible conectar con Google Sheets: {error}")
+        return None
 
-    return worksheet
 
-
-# =====================================================
-# FUNCIONES DE CONVERSIÓN
-# =====================================================
+# ============================================================
+# FUNCIONES DE LIMPIEZA
+# ============================================================
 
 MESES_PDF = {
-    "ENE": "01",
+    "JAN": "01",
     "FEB": "02",
     "MAR": "03",
-    "ABR": "04",
+    "APR": "04",
     "MAY": "05",
     "JUN": "06",
     "JUL": "07",
-    "AGO": "08",
+    "AUG": "08",
     "SEP": "09",
     "OCT": "10",
     "NOV": "11",
-    "DIC": "12"
+    "DEC": "12"
 }
+
+
+def limpiar_texto(valor):
+    if valor is None:
+        return ""
+
+    valor = str(valor)
+    valor = valor.replace("\xa0", " ")
+    valor = re.sub(r"\s+", " ", valor)
+
+    return valor.strip()
+
+
+def limpiar_nit(valor):
+    valor = limpiar_texto(valor)
+    valor = re.sub(r"[^0-9]", "", valor)
+    return valor
 
 
 def convertir_numero(valor):
     if valor is None:
-        return 0
+        return 0.0
 
-    texto = str(valor).strip()
-    texto = texto.replace("−", "-")
-    texto = texto.replace(",", "")
+    texto = limpiar_texto(valor)
+    texto = texto.replace("$", "")
+    texto = texto.replace(" ", "")
+
+    if texto == "":
+        return 0.0
 
     try:
+        if "," in texto and "." in texto:
+            if texto.rfind(",") > texto.rfind("."):
+                texto = texto.replace(".", "").replace(",", ".")
+            else:
+                texto = texto.replace(",", "")
+
+        elif "," in texto:
+            partes = texto.split(",")
+
+            if len(partes[-1]) == 2:
+                texto = texto.replace(".", "").replace(",", ".")
+            else:
+                texto = texto.replace(",", "")
+
+        elif "." in texto:
+            partes = texto.split(".")
+
+            if len(partes[-1]) != 2:
+                texto = texto.replace(".", "")
+
         return float(texto)
-    except ValueError:
-        return 0
+
+    except Exception:
+        return 0.0
 
 
-def convertir_fecha_pdf(fecha_pdf):
-    if not fecha_pdf:
-        return ""
+def convertir_fecha_pdf(fecha):
+    fecha = limpiar_texto(fecha)
+    fecha = fecha.replace("−", "-").replace("–", "-")
 
-    fecha_limpia = (
-        str(fecha_pdf)
-        .replace("−", "-")
-        .strip()
-        .upper()
-    )
-
-    partes = fecha_limpia.split("-")
+    partes = re.split(r"-", fecha)
 
     if len(partes) != 3:
         return ""
 
     anio = partes[0]
-    mes_texto = partes[1]
-    dia = partes[2]
+    mes = partes[1].upper()
+    dia = partes[2].zfill(2)
 
-    mes = MESES_PDF.get(mes_texto)
+    mes_numero = MESES_PDF.get(mes, mes)
 
-    if not mes:
-        return ""
+    try:
+        fecha_final = datetime.strptime(
+            f"{anio}-{mes_numero}-{dia}",
+            "%Y-%m-%d"
+        )
 
-    return f"{anio}-{mes}-{dia}"
+        return fecha_final.strftime("%Y-%m-%d")
 
-
-def limpiar_nit(nit):
-    if not nit:
-        return ""
-
-    nit = (
-        str(nit)
-        .replace("−", "-")
-        .strip()
-    )
-
-    if "-" in nit:
-        nit = nit.split("-")[0]
-
-    return nit.strip()
+    except Exception:
+        return fecha
 
 
-# =====================================================
+# ============================================================
 # EXTRACCIÓN DEL PDF
-# =====================================================
+# ============================================================
 
 def extraer_datos_pdf(archivo_pdf):
-
     registros = []
 
-    contenido_pdf = archivo_pdf.getvalue()
+    contenido = archivo_pdf.read()
 
-    patron_factura = re.compile(
-        r"Numero\s*:\s*(FM[-−]\d+)",
-        re.IGNORECASE
-    )
+    if not contenido:
+        raise ValueError("El archivo PDF está vacío.")
 
-    patron_fecha = re.compile(
-        r"Fecha\s*:\s*(\d{4}[-−][A-Z]{3}[-−]\d{2})",
-        re.IGNORECASE
-    )
+    texto_paginas = []
 
-    patron_cliente = re.compile(
-        r"Cliente\s*:\s*([^|\n]+)",
-        re.IGNORECASE
-    )
-
-    patron_nit = re.compile(
-        r"Nit o C\.C\.\s*:\s*([0-9−-]+)",
-        re.IGNORECASE
-    )
-
-    patron_ciudad = re.compile(
-        r"Ciudad\s*:\s*([^|\n]+)",
-        re.IGNORECASE
-    )
-
-    patron_vendedor = re.compile(
-        r"Vendedor:\s*\d+\s*(?:\|?\s*)([^|\n]+)",
-        re.IGNORECASE
-    )
-
-    patron_pago = re.compile(
-        r"\|\s*(CREDITO[^|]+|CONTADO[^|]+)\s*\|",
-        re.IGNORECASE
-    )
-
-    # Acepta MTS, KLS y otras unidades de hasta cuatro letras.
-    patron_item = re.compile(
-        r"^(\d{3,10})\s+(.+?)\s+"
-        r"(\d+)\s+"
-        r"([\d,.]+)\s+"
-        r"([A-Z]{2,4})\s+"
-        r"([\d,.−-]+)\s+"
-        r"([\d,.−-]+)\s+"
-        r"([\d,.−-]+)"
-        r"(?:\s+([\d,.−-]+)\*)?$",
-        re.IGNORECASE
-    )
-
-    with pdfplumber.open(io.BytesIO(contenido_pdf)) as pdf:
-
+    with pdfplumber.open(io.BytesIO(contenido)) as pdf:
         for pagina in pdf.pages:
-
             texto = pagina.extract_text() or ""
+            texto_paginas.append(texto)
 
-            if not texto.strip():
-                continue
+    texto_completo = "\n".join(texto_paginas)
 
-            factura_match = patron_factura.search(texto)
+    if not texto_completo.strip():
+        raise ValueError(
+            "No se pudo extraer texto del PDF. "
+            "Verifica que el archivo no sea únicamente una imagen escaneada."
+        )
 
-            if not factura_match:
-                continue
+    bloques_factura = re.split(
+        r"(?=Factura\s*(?:No|N[°º]|#)\s*:?\s*[A-Z0-9-]+)",
+        texto_completo,
+        flags=re.IGNORECASE
+    )
 
-            factura = (
-                factura_match.group(1)
-                .replace("−", "-")
-                .strip()
+    if len(bloques_factura) == 1:
+        bloques_factura = [texto_completo]
+
+    for bloque in bloques_factura:
+
+        factura_match = re.search(
+            r"Factura\s*(?:No|N[°º]|#)\s*:?\s*([A-Z0-9-]+)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        if not factura_match:
+            factura_match = re.search(
+                r"\b(FM-\d+)\b",
+                bloque,
+                flags=re.IGNORECASE
             )
 
-            fecha_match = patron_fecha.search(texto)
+        if not factura_match:
+            continue
 
-            fecha = (
-                convertir_fecha_pdf(
-                    fecha_match.group(1)
-                )
-                if fecha_match
-                else ""
+        factura = limpiar_texto(factura_match.group(1)).upper()
+
+        fecha_match = re.search(
+            r"Fecha\s*:?\s*(\d{4}[-−–][A-Z]{3}[-−–]\d{2})",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        fecha = ""
+        if fecha_match:
+            fecha = convertir_fecha_pdf(fecha_match.group(1))
+
+        cliente_match = re.search(
+            r"Cliente\s*:?\s*(.+?)(?=\s+(?:NIT|Nit)\s*:|$)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        cliente = ""
+        if cliente_match:
+            cliente = limpiar_texto(cliente_match.group(1))
+
+        nit_match = re.search(
+            r"NIT\s*:?\s*([0-9.\-]+)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        nit = ""
+        if nit_match:
+            nit = limpiar_nit(nit_match.group(1))
+
+        ciudad_match = re.search(
+            r"Ciudad\s*:?\s*(.+?)(?=\s+(?:Vendedor|Venta|Forma)\s*:|$)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        ciudad = ""
+        if ciudad_match:
+            ciudad = limpiar_texto(ciudad_match.group(1))
+
+        vendedor_match = re.search(
+            r"Vendedor\s*:?\s*(.+?)(?=\s+(?:Forma de Pago|Forma Pago|Pago)\s*:|$)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        vendedor = ""
+        if vendedor_match:
+            vendedor = limpiar_texto(vendedor_match.group(1))
+
+        pago_match = re.search(
+            r"Forma\s+de\s+Pago\s*:?\s*(.+)",
+            bloque,
+            flags=re.IGNORECASE
+        )
+
+        forma_pago = ""
+        if pago_match:
+            forma_pago = limpiar_texto(pago_match.group(1).split("\n")[0])
+
+        # Busca líneas de productos o servicios.
+        patron_linea = re.compile(
+            r"(?m)^\s*"
+            r"(\d{3,10})\s+"
+            r"(.+?)\s+"
+            r"(\d+(?:[.,]\d+)?)\s+"
+            r"(MTS|KLS|UND|UN|KG|KGM|SERV|UNIDAD)\s+"
+            r"([\d.,]+)\s+"
+            r"(?:[\d.,]+\s+)?"
+            r"([\d.,]+)"
+            r"\s*$",
+            flags=re.IGNORECASE
+        )
+
+        lineas = patron_linea.findall(bloque)
+
+        # Segundo patrón para documentos donde no aparece la unidad.
+        if not lineas:
+            patron_linea_sin_unidad = re.compile(
+                r"(?m)^\s*"
+                r"(\d{3,10})\s+"
+                r"(.+?)\s+"
+                r"(\d+(?:[.,]\d+)?)\s+"
+                r"([\d.,]+)\s+"
+                r"([\d.,]+)"
+                r"\s*$",
+                flags=re.IGNORECASE
             )
 
-            cliente_match = patron_cliente.search(texto)
+            lineas_sin_unidad = patron_linea_sin_unidad.findall(bloque)
 
-            cliente = (
-                cliente_match.group(1).strip()
-                if cliente_match
-                else ""
-            )
-
-            nit_match = patron_nit.search(texto)
-
-            nit = (
-                limpiar_nit(nit_match.group(1))
-                if nit_match
-                else ""
-            )
-
-            ciudad_match = patron_ciudad.search(texto)
-
-            ciudad = (
-                ciudad_match.group(1)
-                .split("+")[0]
-                .strip()
-                if ciudad_match
-                else ""
-            )
-
-            vendedor_match = patron_vendedor.search(texto)
-
-            vendedor = (
-                vendedor_match.group(1).strip()
-                if vendedor_match
-                else ""
-            )
-
-            pago_match = patron_pago.search(texto)
-
-            forma_pago = (
-                pago_match.group(1).strip()
-                if pago_match
-                else "No registrada"
-            )
-
-            for linea in texto.splitlines():
-
-                linea_limpia = (
-                    linea
-                    .strip()
-                    .strip("|")
-                    .strip()
-                )
-
-                item_match = patron_item.match(
-                    linea_limpia
-                )
-
-                if not item_match:
-                    continue
-
-                codigo = item_match.group(1)
-                descripcion = item_match.group(2).strip()
-
-                cantidad = convertir_numero(
-                    item_match.group(4)
-                )
-
-                unidad = item_match.group(5).upper()
-
-                precio_unitario = convertir_numero(
-                    item_match.group(6)
-                )
-
-                valor_total = convertir_numero(
-                    item_match.group(8)
-                )
-
-                iva = (
-                    convertir_numero(item_match.group(9))
-                    if item_match.group(9)
-                    else (
-                        19
-                        if "*" in linea
-                        else 0
+            for codigo, descripcion, cantidad, precio, total in lineas_sin_unidad:
+                lineas.append(
+                    (
+                        codigo,
+                        descripcion,
+                        cantidad,
+                        "UND",
+                        precio,
+                        total
                     )
                 )
 
-                registros.append([
-                    factura,
-                    fecha,
-                    cliente,
-                    nit,
-                    ciudad,
-                    vendedor,
-                    codigo,
-                    descripcion,
-                    unidad,
-                    cantidad,
-                    precio_unitario,
-                    valor_total,
-                    iva,
-                    forma_pago
-                ])
+        for linea in lineas:
+            codigo = limpiar_texto(linea[0])
+            descripcion = limpiar_texto(linea[1])
+            cantidad = convertir_numero(linea[2])
+            unidad = limpiar_texto(linea[3]).upper()
+            precio_unitario = convertir_numero(linea[4])
+            valor_total = convertir_numero(linea[5])
+
+            if not codigo or valor_total == 0:
+                continue
+
+            registros.append([
+                factura,
+                fecha,
+                cliente,
+                nit,
+                ciudad,
+                vendedor,
+                codigo,
+                descripcion,
+                unidad,
+                cantidad,
+                precio_unitario,
+                valor_total,
+                19,
+                forma_pago
+            ])
+
+    if not registros:
+        raise ValueError(
+            "No se encontraron líneas de productos o servicios. "
+            "Revisa el formato del PDF."
+        )
 
     return registros
 
 
-# =====================================================
-# CONTROL DE DUPLICADOS
-# =====================================================
+# ============================================================
+# DUPLICADOS Y CARGA
+# ============================================================
 
-def normalizar_clave(valor):
-    return str(valor).strip().upper()
+def obtener_informacion_duplicados(hoja, registros_pdf):
+    datos = hoja.get_all_values()
 
-
-def obtener_clave_registro(fila):
-
-    factura = normalizar_clave(fila[0])
-    codigo = normalizar_clave(fila[6])
-    valor = round(convertir_numero(fila[11]), 2)
-
-    return factura, codigo, valor
-
-
-def filtrar_registros_nuevos(worksheet, registros):
-
-    datos_existentes = worksheet.get_all_values()
-
-    if len(datos_existentes) < 2:
-        return registros
+    if len(datos) < 2:
+        return {
+            "facturas_existentes": set(),
+            "filas_a_borrar": [],
+            "facturas_nuevas": set()
+        }
 
     encabezados = [
-        str(valor).strip()
-        for valor in datos_existentes[0]
+        limpiar_texto(columna)
+        for columna in datos[0]
     ]
 
-    posiciones = {
-        nombre: indice
-        for indice, nombre in enumerate(encabezados)
+    if "Factura #" not in encabezados:
+        raise ValueError(
+            "No existe la columna 'Factura #' en la fila 1 de Google Sheets."
+        )
+
+    posicion_factura = encabezados.index("Factura #")
+
+    facturas_pdf = {
+        limpiar_texto(registro[0])
+        for registro in registros_pdf
     }
 
-    requeridas = [
-        "Factura #",
-        "Codigo Articulo",
-        "Valor Total"
+    facturas_existentes = set()
+    filas_a_borrar = []
+
+    for numero_fila, fila in enumerate(datos[1:], start=2):
+        if len(fila) <= posicion_factura:
+            continue
+
+        factura = limpiar_texto(fila[posicion_factura])
+
+        if factura in facturas_pdf:
+            facturas_existentes.add(factura)
+            filas_a_borrar.append(numero_fila)
+
+    facturas_nuevas = facturas_pdf - facturas_existentes
+
+    return {
+        "facturas_existentes": facturas_existentes,
+        "filas_a_borrar": filas_a_borrar,
+        "facturas_nuevas": facturas_nuevas
+    }
+
+
+def agregar_facturas_nuevas(hoja, registros_pdf, facturas_existentes):
+    registros_nuevos = [
+        registro
+        for registro in registros_pdf
+        if limpiar_texto(registro[0]) not in facturas_existentes
     ]
 
-    if not all(
-        columna in posiciones
-        for columna in requeridas
-    ):
-        return registros
-
-    claves_existentes = set()
-
-    for fila in datos_existentes[1:]:
-
-        if not fila:
-            continue
-
-        try:
-            factura = fila[posiciones["Factura #"]]
-            codigo = fila[posiciones["Codigo Articulo"]]
-            valor = fila[posiciones["Valor Total"]]
-
-            clave = (
-                normalizar_clave(factura),
-                normalizar_clave(codigo),
-                round(convertir_numero(valor), 2)
-            )
-
-            claves_existentes.add(clave)
-
-        except IndexError:
-            continue
-
-    registros_nuevos = []
-
-    for registro in registros:
-
-        clave = obtener_clave_registro(registro)
-
-        if clave not in claves_existentes:
-            registros_nuevos.append(registro)
+    if registros_nuevos:
+        hoja.append_rows(
+            registros_nuevos,
+            value_input_option="USER_ENTERED"
+        )
 
     return registros_nuevos
 
 
-# =====================================================
-# CARGA Y LIMPIEZA DE DATOS
-# =====================================================
+def reemplazar_facturas(hoja, registros_pdf, filas_a_borrar):
+    # Se eliminan de abajo hacia arriba para no alterar los números de fila.
+    for numero_fila in sorted(filas_a_borrar, reverse=True):
+        hoja.delete_rows(numero_fila)
 
-@st.cache_data(ttl=600)
-def cargar_y_limpiar_datos():
+    hoja.append_rows(
+        registros_pdf,
+        value_input_option="USER_ENTERED"
+    )
 
-    worksheet = conectar_hoja()
 
-    data = worksheet.get_all_values()
+# ============================================================
+# LECTURA DE GOOGLE SHEETS
+# ============================================================
 
-    if not data:
+@st.cache_data(ttl=30)
+def cargar_datos():
+    hoja = conectar_hoja()
+
+    if hoja is None:
         return pd.DataFrame()
 
-    if len(data) < 2:
+    datos = hoja.get_all_values()
 
-        encabezados = [
-            str(columna)
-            .replace("\ufeff", "")
-            .strip()
-            for columna in data[0]
-        ]
-
-        return pd.DataFrame(columns=encabezados)
+    if not datos:
+        return pd.DataFrame(columns=COLUMNAS)
 
     encabezados = [
-        str(columna)
-        .replace("\ufeff", "")
-        .strip()
-        for columna in data[0]
+        limpiar_texto(columna)
+        for columna in datos[0]
     ]
 
+    if len(datos) == 1:
+        return pd.DataFrame(columns=encabezados)
+
+    filas = datos[1:]
+
+    cantidad_columnas = len(encabezados)
+
+    filas_ajustadas = []
+
+    for fila in filas:
+        fila = list(fila)
+
+        if len(fila) < cantidad_columnas:
+            fila.extend([""] * (cantidad_columnas - len(fila)))
+
+        if len(fila) > cantidad_columnas:
+            fila = fila[:cantidad_columnas]
+
+        filas_ajustadas.append(fila)
+
     df = pd.DataFrame(
-        data[1:],
+        filas_ajustadas,
         columns=encabezados
     )
 
-    df = df.replace("", np.nan)
-    df = df.dropna(how="all").copy()
+    for columna in ["Cantidad", "Precio Unitario", "Valor Total", "% IVA"]:
+        if columna in df.columns:
+            df[columna] = df[columna].apply(convertir_numero)
 
-    if df.empty:
-        return df
-
-    df.columns = (
-        df.columns
-        .astype(str)
-        .str.replace("\ufeff", "", regex=False)
-        .str.strip()
-    )
-
-    equivalencias = {
-        "Código Articulo": "Codigo Articulo",
-        "Código Artículo": "Codigo Articulo",
-        "Codigo Artículo": "Codigo Articulo",
-        "Descripción": "Descripcion",
-        "Precio Unitario ": "Precio Unitario",
-        "Cantidad ": "Cantidad",
-        "% IVA ": "% IVA",
-        "Unidad ": "Unidad"
-    }
-
-    df.rename(
-        columns=equivalencias,
-        inplace=True
-    )
-
-    columnas_requeridas = [
-        "Factura #",
-        "Fecha",
-        "Cliente",
-        "Nit",
-        "Ciudad",
-        "Vendedor",
-        "Codigo Articulo",
-        "Descripcion",
-        "Unidad",
-        "Cantidad",
-        "Precio Unitario",
-        "Valor Total",
-        "% IVA"
-    ]
-
-    columnas_faltantes = [
-        columna
-        for columna in columnas_requeridas
-        if columna not in df.columns
-    ]
-
-    if columnas_faltantes:
-        raise ValueError(
-            f"Columnas faltantes: {columnas_faltantes}. "
-            f"Columnas encontradas: {list(df.columns)}"
-        )
-
-    if "Forma de Pago" not in df.columns:
-        df["Forma de Pago"] = "No registrada"
-
-    columnas_texto = [
-        "Factura #",
-        "Cliente",
-        "Nit",
-        "Ciudad",
-        "Vendedor",
-        "Codigo Articulo",
-        "Descripcion",
-        "Unidad",
-        "Forma de Pago"
-    ]
-
-    for columna in columnas_texto:
-        df[columna] = (
-            df[columna]
-            .astype(str)
-            .str.strip()
-        )
-
-    df["Fecha"] = pd.to_datetime(
-        df["Fecha"],
-        errors="coerce"
-    )
-
-    for columna in [
-        "Cantidad",
-        "Precio Unitario",
-        "Valor Total",
-        "% IVA"
-    ]:
-
-        df[columna] = (
-            df[columna]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-            .str.replace("$", "", regex=False)
-            .str.replace("%", "", regex=False)
-            .str.replace("*", "", regex=False)
-            .str.strip()
-        )
-
-        df[columna] = pd.to_numeric(
-            df[columna],
+    if "Fecha" in df.columns:
+        df["Fecha"] = pd.to_datetime(
+            df["Fecha"],
             errors="coerce"
-        ).fillna(0)
+        )
 
-    codigos_servicios = [
-        "888912",
-        "888923",
-        "888916"
-    ]
+    if "Codigo Articulo" in df.columns:
+        df["Codigo Articulo"] = (
+            df["Codigo Articulo"]
+            .astype(str)
+            .str.replace(".0", "", regex=False)
+            .str.strip()
+        )
 
-    df["Tipo"] = np.where(
-        df["Codigo Articulo"].isin(codigos_servicios),
-        "Servicio",
-        "Producto"
-    )
+    if "Tipo" not in df.columns:
+        servicios = ["888912", "888916", "888923"]
 
-    df["Ventas con IVA"] = (
-        df["Valor Total"] *
-        (1 + df["% IVA"] / 100)
-    )
+        df["Tipo"] = np.where(
+            df["Codigo Articulo"].isin(servicios),
+            "Servicio",
+            "Producto"
+        )
+
+    if "Valor Total" in df.columns and "% IVA" in df.columns:
+        df["Ventas con IVA"] = (
+            df["Valor Total"] *
+            (1 + df["% IVA"] / 100)
+        )
 
     return df
 
 
-# =====================================================
-# BARRA LATERAL Y CARGA DE PDF
-# =====================================================
+# ============================================================
+# INICIO DE LA APLICACIÓN
+# ============================================================
 
-st.sidebar.title("Filtros de análisis")
+if "registros_pdf" not in st.session_state:
+    st.session_state["registros_pdf"] = None
 
-if st.sidebar.button("Actualizar datos"):
-    st.cache_data.clear()
-    st.rerun()
+if "mensaje" not in st.session_state:
+    st.session_state["mensaje"] = ""
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Cargar facturas PDF")
+
+st.markdown(
+    '<div class="main-title">Magic Print Analytics</div>',
+    unsafe_allow_html=True
+)
+
+hoja = conectar_hoja()
+
+if hoja is None:
+    st.stop()
+
+
+# ============================================================
+# CARGA DEL PDF
+# ============================================================
+
+st.sidebar.header("Cargar facturas PDF")
 
 archivo_pdf = st.sidebar.file_uploader(
     "Selecciona un archivo PDF",
-    type=["pdf"],
-    help="Puedes subir un archivo con cualquier nombre."
+    type=["pdf"]
 )
 
 if archivo_pdf is not None:
-
     st.sidebar.success(
         f"Archivo seleccionado: {archivo_pdf.name}"
     )
 
-    if st.sidebar.button("Procesar PDF"):
-
+    if st.sidebar.button(
+        "Procesar PDF",
+        type="primary",
+        key="procesar_pdf"
+    ):
         try:
+            with st.spinner("Procesando el PDF..."):
+                registros = extraer_datos_pdf(archivo_pdf)
 
-            registros_pdf = extraer_datos_pdf(
-                archivo_pdf
+            st.session_state["registros_pdf"] = registros
+            st.success(
+                f"Se encontraron {len(registros)} líneas de factura."
             )
-
-            if not registros_pdf:
-                st.error(
-                    "No se encontraron líneas de factura "
-                    "en el PDF."
-                )
-                st.stop()
-
-            registros_nuevos = filtrar_registros_nuevos(
-                conectar_hoja(),
-                registros_pdf
-            )
-
-            vista_previa = pd.DataFrame(
-                registros_pdf,
-                columns=COLUMNAS_GOOGLE_SHEETS
-            )
-
-            st.subheader("Vista previa del PDF")
-
-            st.write(
-                f"Registros encontrados: "
-                f"{len(registros_pdf)}"
-            )
-
-            st.dataframe(
-                vista_previa,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            if not registros_nuevos:
-
-                st.warning(
-                    "Todos los registros del PDF "
-                    "ya existen en Google Sheets."
-                )
-
-            else:
-
-                if st.button(
-                    "Confirmar carga en Google Sheets"
-                ):
-
-                    conectar_hoja().append_rows(
-                        registros_nuevos,
-                        value_input_option="USER_ENTERED"
-                    )
-
-                    st.cache_data.clear()
-
-                    st.success(
-                        f"Se agregaron "
-                        f"{len(registros_nuevos)} registros "
-                        "a Google Sheets."
-                    )
-
-                    st.info(
-                        "Pulsa 'Actualizar datos' "
-                        "para ver las nuevas facturas."
-                    )
+            st.rerun()
 
         except Exception as error:
-
-            st.error(
-                "No fue posible procesar el PDF."
-            )
-
-            st.exception(error)
+            st.error(f"No fue posible procesar el PDF: {error}")
 
 
-# =====================================================
-# CARGA DEL DASHBOARD
-# =====================================================
+# ============================================================
+# PREVISUALIZACIÓN Y CONFIRMACIÓN DE CARGA
+# ============================================================
 
-try:
-    df_base = cargar_y_limpiar_datos()
+registros_pdf = st.session_state.get("registros_pdf")
 
-except Exception as error:
+if registros_pdf:
 
-    st.error(
-        "No fue posible cargar la información "
-        "de Google Sheets."
-    )
+    st.subheader("Vista previa del PDF")
 
-    st.exception(error)
-    st.stop()
-
-
-if df_base.empty:
-
-    st.title("Magic Print Analytics")
-
-    st.info(
-        "La conexión con Google Sheets funciona correctamente, "
-        "pero Hoja1 todavía no contiene registros."
+    df_pdf = pd.DataFrame(
+        registros_pdf,
+        columns=COLUMNAS
     )
 
     st.write(
-        "Carga un PDF desde la barra lateral. "
-        "Los encabezados deben estar en la fila 1."
+        f"Registros encontrados: {len(df_pdf)}"
+    )
+
+    st.dataframe(
+        df_pdf,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    try:
+        informacion = obtener_informacion_duplicados(
+            hoja,
+            registros_pdf
+        )
+
+        facturas_existentes = sorted(
+            informacion["facturas_existentes"]
+        )
+
+        facturas_nuevas = sorted(
+            informacion["facturas_nuevas"]
+        )
+
+        if facturas_existentes:
+            st.warning(
+                "Se encontraron facturas que ya están cargadas en Google Sheets."
+            )
+
+            st.write(
+                "Facturas repetidas: "
+                + ", ".join(facturas_existentes)
+            )
+
+            st.write(
+                f"Líneas existentes relacionadas: "
+                f"{len(informacion['filas_a_borrar'])}"
+            )
+
+            st.info(
+                "Si eliges cargar únicamente las nuevas, "
+                "las facturas repetidas serán ignoradas."
+            )
+
+            st.info(
+                "Si eliges reemplazar, se eliminarán las líneas "
+                "existentes de esas facturas y se cargarán nuevamente."
+            )
+
+            confirmar_reemplazo = st.checkbox(
+                "Confirmo que deseo reemplazar las facturas repetidas.",
+                key="confirmar_reemplazo"
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button(
+                    "Cargar solo facturas nuevas",
+                    key="cargar_solo_nuevas"
+                ):
+                    registros_nuevos = agregar_facturas_nuevas(
+                        hoja,
+                        registros_pdf,
+                        informacion["facturas_existentes"]
+                    )
+
+                    if registros_nuevos:
+                        st.cache_data.clear()
+                        st.session_state["registros_pdf"] = None
+
+                        st.success(
+                            f"Se cargaron {len(registros_nuevos)} "
+                            "líneas nuevas."
+                        )
+
+                        st.rerun()
+
+                    else:
+                        st.info(
+                            "No hay facturas nuevas para cargar."
+                        )
+
+            with col2:
+                if st.button(
+                    "Reemplazar repetidas y cargar nuevas",
+                    type="primary",
+                    key="reemplazar_y_cargar"
+                ):
+                    if not confirmar_reemplazo:
+                        st.error(
+                            "Debes confirmar el reemplazo "
+                            "antes de continuar."
+                        )
+                    else:
+                        reemplazar_facturas(
+                            hoja,
+                            registros_pdf,
+                            informacion["filas_a_borrar"]
+                        )
+
+                        st.cache_data.clear()
+                        st.session_state["registros_pdf"] = None
+
+                        st.success(
+                            "Las facturas repetidas fueron reemplazadas "
+                            "y las nuevas fueron cargadas."
+                        )
+
+                        st.rerun()
+
+        else:
+            st.success(
+                "No se encontraron facturas repetidas. "
+                "Todas serán cargadas."
+            )
+
+            if st.button(
+                "Cargar facturas en Google Sheets",
+                type="primary",
+                key="cargar_facturas_nuevas"
+            ):
+                hoja.append_rows(
+                    registros_pdf,
+                    value_input_option="USER_ENTERED"
+                )
+
+                st.cache_data.clear()
+                st.session_state["registros_pdf"] = None
+
+                st.success(
+                    "Las facturas fueron cargadas correctamente."
+                )
+
+                st.rerun()
+
+    except Exception as error:
+        st.error(
+            f"No fue posible validar las facturas existentes: {error}"
+        )
+
+
+# ============================================================
+# CARGA DE DATOS PARA EL DASHBOARD
+# ============================================================
+
+df_base = cargar_datos()
+
+if df_base.empty:
+    st.info(
+        "Google Sheets está conectado, pero todavía no contiene registros. "
+        "Carga un PDF desde la barra lateral."
     )
 
     st.stop()
 
 
-# =====================================================
+# ============================================================
 # FILTROS
-# =====================================================
+# ============================================================
 
-fechas_validas = df_base["Fecha"].dropna()
+st.sidebar.markdown("---")
+st.sidebar.header("Filtros de análisis")
 
-if fechas_validas.empty:
-    st.error(
-        "No hay fechas válidas en la columna Fecha."
-    )
-    st.stop()
+df = df_base.copy()
 
-fecha_min = fechas_validas.min().date()
-fecha_max = fechas_validas.max().date()
+if "Fecha" in df.columns:
+    fechas_validas = df["Fecha"].dropna()
 
-rango_fechas = st.sidebar.date_input(
-    "Rango de fechas",
-    value=(fecha_min, fecha_max),
-    min_value=fecha_min,
-    max_value=fecha_max
-)
+    if not fechas_validas.empty:
+        fecha_minima = fechas_validas.min().date()
+        fecha_maxima = fechas_validas.max().date()
 
-df_filtrado = df_base.copy()
-
-if isinstance(rango_fechas, tuple):
-    if len(rango_fechas) == 2:
-
-        fecha_inicio = pd.to_datetime(
-            rango_fechas[0]
+        rango_fechas = st.sidebar.date_input(
+            "Rango de fechas",
+            value=(fecha_minima, fecha_maxima),
+            min_value=fecha_minima,
+            max_value=fecha_maxima
         )
 
-        fecha_fin = pd.to_datetime(
-            rango_fechas[1]
-        )
+        if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
+            inicio, fin = rango_fechas
 
-        df_filtrado = df_filtrado[
-            (df_filtrado["Fecha"] >= fecha_inicio) &
-            (df_filtrado["Fecha"] <= fecha_fin)
-        ]
+            df = df[
+                (df["Fecha"].dt.date >= inicio) &
+                (df["Fecha"].dt.date <= fin)
+            ]
 
-
-ciudades = st.sidebar.multiselect(
-    "Ciudad",
-    sorted(df_filtrado["Ciudad"].unique())
-)
-
-if ciudades:
-    df_filtrado = df_filtrado[
-        df_filtrado["Ciudad"].isin(ciudades)
-    ]
-
-
-vendedores = st.sidebar.multiselect(
-    "Vendedor",
-    sorted(df_filtrado["Vendedor"].unique())
-)
-
-if vendedores:
-    df_filtrado = df_filtrado[
-        df_filtrado["Vendedor"].isin(vendedores)
-    ]
-
-
-clientes = st.sidebar.multiselect(
-    "Cliente",
-    sorted(df_filtrado["Cliente"].unique())
-)
-
-if clientes:
-    df_filtrado = df_filtrado[
-        df_filtrado["Cliente"].isin(clientes)
-    ]
-
-
-unidades = st.sidebar.multiselect(
-    "Unidad",
-    sorted(df_filtrado["Unidad"].unique())
-)
-
-if unidades:
-    df_filtrado = df_filtrado[
-        df_filtrado["Unidad"].isin(unidades)
-    ]
-
-
-tipos = st.sidebar.multiselect(
-    "Tipo",
-    sorted(df_filtrado["Tipo"].unique())
-)
-
-if tipos:
-    df_filtrado = df_filtrado[
-        df_filtrado["Tipo"].isin(tipos)
-    ]
-
-
-if df_filtrado.empty:
-    st.warning(
-        "No existen registros para los filtros seleccionados."
-    )
-    st.stop()
-
-
-# =====================================================
-# KPIs
-# =====================================================
-
-facturas_unicas = df_filtrado["Factura #"].nunique()
-clientes_unicos = df_filtrado["Cliente"].nunique()
-
-ventas_sin_iva = df_filtrado["Valor Total"].sum()
-ventas_con_iva = df_filtrado["Ventas con IVA"].sum()
-
-cantidad_mts = df_filtrado.loc[
-    df_filtrado["Unidad"] == "MTS",
-    "Cantidad"
-].sum()
-
-cantidad_kls = df_filtrado.loc[
-    df_filtrado["Unidad"] == "KLS",
-    "Cantidad"
-].sum()
-
-ticket_promedio = (
-    ventas_sin_iva / facturas_unicas
-    if facturas_unicas > 0
-    else 0
-)
-
-
-def mostrar_kpi(
-    columna,
-    titulo,
-    valor,
-    prefijo=""
-):
-    columna.markdown(
-        f"""
-        <div class="kpi-card">
-            <div class="kpi-title">{titulo}</div>
-            <div class="kpi-value">
-                {prefijo}{valor}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+if "Ciudad" in df.columns:
+    ciudades = sorted(
+        df["Ciudad"]
+        .dropna()
+        .astype(str)
+        .unique()
     )
 
+    ciudades_seleccionadas = st.sidebar.multiselect(
+        "Ciudad",
+        ciudades,
+        default=ciudades
+    )
 
-# =====================================================
-# ENCABEZADO
-# =====================================================
+    df = df[df["Ciudad"].isin(ciudades_seleccionadas)]
 
-st.title("Magic Print Analytics")
+if "Vendedor" in df.columns:
+    vendedores = sorted(
+        df["Vendedor"]
+        .dropna()
+        .astype(str)
+        .unique()
+    )
 
-st.caption(
-    "Fuente: Base_Datos_Ventas / Hoja1"
-)
+    vendedores_seleccionados = st.sidebar.multiselect(
+        "Vendedor",
+        vendedores,
+        default=vendedores
+    )
 
-st.markdown("---")
+    df = df[df["Vendedor"].isin(vendedores_seleccionados)]
 
-col1, col2, col3, col4, col5, col6 = st.columns(6)
+if "Cliente" in df.columns:
+    clientes = sorted(
+        df["Cliente"]
+        .dropna()
+        .astype(str)
+        .unique()
+    )
 
-mostrar_kpi(
-    col1,
+    clientes_seleccionados = st.sidebar.multiselect(
+        "Cliente",
+        clientes
+    )
+
+    if clientes_seleccionados:
+        df = df[df["Cliente"].isin(clientes_seleccionados)]
+
+if "Unidad" in df.columns:
+    unidades = sorted(
+        df["Unidad"]
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    unidades_seleccionadas = st.sidebar.multiselect(
+        "Unidad",
+        unidades,
+        default=unidades
+    )
+
+    df = df[df["Unidad"].isin(unidades_seleccionadas)]
+
+if "Tipo" in df.columns:
+    tipos = sorted(df["Tipo"].dropna().unique())
+
+    tipos_seleccionados = st.sidebar.multiselect(
+        "Tipo de registro",
+        tipos,
+        default=tipos
+    )
+
+    df = df[df["Tipo"].isin(tipos_seleccionados)]
+
+
+# ============================================================
+# DASHBOARD
+# ============================================================
+
+st.subheader("Indicadores comerciales")
+
+ventas = df["Valor Total"].sum() if "Valor Total" in df.columns else 0
+facturas = df["Factura #"].nunique() if "Factura #" in df.columns else 0
+clientes = df["Cliente"].nunique() if "Cliente" in df.columns else 0
+cantidad = df["Cantidad"].sum() if "Cantidad" in df.columns else 0
+ticket_promedio = ventas / facturas if facturas else 0
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+col1.metric(
     "Ventas sin IVA",
-    f"{ventas_sin_iva:,.0f}",
-    "$"
+    f"${ventas:,.0f}"
 )
 
-mostrar_kpi(
-    col2,
+col2.metric(
     "Facturas",
-    f"{facturas_unicas:,.0f}"
+    f"{facturas:,.0f}"
 )
 
-mostrar_kpi(
-    col3,
+col3.metric(
     "Clientes",
-    f"{clientes_unicos:,.0f}"
+    f"{clientes:,.0f}"
 )
 
-mostrar_kpi(
-    col4,
-    "Cantidad MTS",
-    f"{cantidad_mts:,.2f}"
+col4.metric(
+    "Unidades vendidas",
+    f"{cantidad:,.0f}"
 )
 
-mostrar_kpi(
-    col5,
-    "Cantidad KLS",
-    f"{cantidad_kls:,.2f}"
-)
-
-mostrar_kpi(
-    col6,
+col5.metric(
     "Ticket promedio",
-    f"{ticket_promedio:,.0f}",
-    "$"
+    f"${ticket_promedio:,.0f}"
 )
 
 
-# =====================================================
-# TENDENCIA
-# =====================================================
+# ============================================================
+# GRÁFICOS
+# ============================================================
 
-st.subheader("Tendencia de ventas")
+st.subheader("Análisis de ventas")
 
-ventas_diarias = (
-    df_filtrado
-    .groupby("Fecha", as_index=False)["Valor Total"]
-    .sum()
-    .sort_values("Fecha")
-)
+col1, col2 = st.columns(2)
 
-fig_tendencia = px.line(
-    ventas_diarias,
-    x="Fecha",
-    y="Valor Total",
-    markers=True,
-    color_discrete_sequence=[COLOR_PRINCIPAL]
-)
-
-fig_tendencia.update_layout(
-    plot_bgcolor="rgba(0,0,0,0)",
-    xaxis_title="Fecha",
-    yaxis_title="Ventas sin IVA"
-)
-
-st.plotly_chart(
-    fig_tendencia,
-    use_container_width=True
-)
-
-
-# =====================================================
-# CIUDAD Y VENDEDOR
-# =====================================================
-
-col_ciudad, col_vendedor = st.columns(2)
-
-with col_ciudad:
-
-    st.subheader("Ventas por ciudad")
-
-    ventas_ciudad = (
-        df_filtrado
-        .groupby("Ciudad", as_index=False)["Valor Total"]
-        .sum()
-        .sort_values("Valor Total")
-    )
-
-    fig_ciudad = px.bar(
-        ventas_ciudad,
-        x="Valor Total",
-        y="Ciudad",
-        orientation="h",
-        text_auto=".2s",
-        color_discrete_sequence=[COLOR_PRINCIPAL]
-    )
-
-    fig_ciudad.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_title="Ventas sin IVA",
-        yaxis_title=""
-    )
-
-    st.plotly_chart(
-        fig_ciudad,
-        use_container_width=True
-    )
-
-
-with col_vendedor:
-
-    st.subheader("Ventas por vendedor")
-
-    ventas_vendedor = (
-        df_filtrado
-        .groupby("Vendedor")
-        .agg(
-            Ventas=("Valor Total", "sum"),
-            Facturas=("Factura #", "nunique")
-        )
-        .reset_index()
-        .sort_values("Ventas")
-    )
-
-    ventas_vendedor["Ticket promedio"] = (
-        ventas_vendedor["Ventas"] /
-        ventas_vendedor["Facturas"]
-    )
-
-    fig_vendedor = px.bar(
-        ventas_vendedor,
-        x="Ventas",
-        y="Vendedor",
-        orientation="h",
-        text_auto=".2s",
-        hover_data=[
-            "Facturas",
-            "Ticket promedio"
-        ],
-        color_discrete_sequence=[COLOR_SECUNDARIO]
-    )
-
-    fig_vendedor.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_title="Ventas sin IVA",
-        yaxis_title=""
-    )
-
-    st.plotly_chart(
-        fig_vendedor,
-        use_container_width=True
-    )
-
-
-# =====================================================
-# PRODUCTOS Y SERVICIOS
-# =====================================================
-
-col_producto, col_composicion = st.columns(2)
-
-with col_producto:
-
-    st.subheader("Ranking de productos y servicios")
-
-    metrica = st.radio(
-        "Métrica",
-        [
-            "Ventas",
-            "Cantidad vendida",
-            "Frecuencia de líneas"
-        ],
-        horizontal=True
-    )
-
-    if metrica == "Ventas":
-
-        datos_producto = (
-            df_filtrado
-            .groupby("Descripcion", as_index=False)["Valor Total"]
+with col1:
+    if "Fecha" in df.columns and "Valor Total" in df.columns:
+        ventas_tiempo = (
+            df.groupby("Fecha", as_index=False)["Valor Total"]
             .sum()
-            .sort_values("Valor Total")
-            .tail(10)
+            .sort_values("Fecha")
         )
 
-        fig_producto = px.bar(
-            datos_producto,
+        figura = px.line(
+            ventas_tiempo,
+            x="Fecha",
+            y="Valor Total",
+            markers=True,
+            title="Evolución de ventas"
+        )
+
+        figura.update_layout(
+            yaxis_title="Ventas",
+            xaxis_title="Fecha"
+        )
+
+        st.plotly_chart(
+            figura,
+            use_container_width=True
+        )
+
+with col2:
+    if "Ciudad" in df.columns and "Valor Total" in df.columns:
+        ventas_ciudad = (
+            df.groupby("Ciudad", as_index=False)["Valor Total"]
+            .sum()
+            .sort_values("Valor Total", ascending=False)
+        )
+
+        figura = px.bar(
+            ventas_ciudad,
+            x="Ciudad",
+            y="Valor Total",
+            color="Ciudad",
+            title="Ventas por ciudad"
+        )
+
+        figura.update_layout(
+            showlegend=False,
+            yaxis_title="Ventas",
+            xaxis_title="Ciudad"
+        )
+
+        st.plotly_chart(
+            figura,
+            use_container_width=True
+        )
+
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if "Vendedor" in df.columns and "Valor Total" in df.columns:
+        ventas_vendedor = (
+            df.groupby("Vendedor", as_index=False)["Valor Total"]
+            .sum()
+            .sort_values("Valor Total", ascending=False)
+        )
+
+        figura = px.bar(
+            ventas_vendedor,
+            x="Valor Total",
+            y="Vendedor",
+            orientation="h",
+            color="Vendedor",
+            title="Ventas por vendedor"
+        )
+
+        figura.update_layout(
+            showlegend=False,
+            xaxis_title="Ventas",
+            yaxis_title="Vendedor"
+        )
+
+        st.plotly_chart(
+            figura,
+            use_container_width=True
+        )
+
+with col2:
+    if "Descripcion" in df.columns and "Valor Total" in df.columns:
+        ventas_producto = (
+            df.groupby("Descripcion", as_index=False)["Valor Total"]
+            .sum()
+            .sort_values("Valor Total", ascending=False)
+            .head(15)
+        )
+
+        figura = px.bar(
+            ventas_producto,
             x="Valor Total",
             y="Descripcion",
             orientation="h",
-            text_auto=".2s",
-            color_discrete_sequence=[COLOR_PRINCIPAL]
+            color="Valor Total",
+            title="Productos y servicios con mayor venta"
         )
 
-        fig_producto.update_layout(
-            xaxis_title="Ventas sin IVA",
-            yaxis_title=""
+        figura.update_layout(
+            yaxis_title="Descripción",
+            xaxis_title="Ventas"
         )
 
-    elif metrica == "Cantidad vendida":
-
-        datos_producto = (
-            df_filtrado
-            .groupby(
-                ["Descripcion", "Unidad"],
-                as_index=False
-            )["Cantidad"]
-            .sum()
-            .sort_values("Cantidad")
-            .tail(10)
+        st.plotly_chart(
+            figura,
+            use_container_width=True
         )
 
-        datos_producto["Etiqueta"] = (
-            datos_producto["Descripcion"] +
-            " (" +
-            datos_producto["Unidad"] +
-            ")"
-        )
 
-        fig_producto = px.bar(
-            datos_producto,
-            x="Cantidad",
-            y="Etiqueta",
-            orientation="h",
-            text_auto=".2s",
-            color_discrete_sequence=[COLOR_PRINCIPAL]
-        )
+# ============================================================
+# TABLA DETALLADA
+# ============================================================
 
-        fig_producto.update_layout(
-            xaxis_title="Cantidad vendida",
-            yaxis_title=""
-        )
+st.subheader("Detalle de facturación")
 
-    else:
-
-        datos_producto = (
-            df_filtrado
-            .groupby("Descripcion")
-            .size()
-            .reset_index(name="Frecuencia")
-            .sort_values("Frecuencia")
-            .tail(10)
-        )
-
-        fig_producto = px.bar(
-            datos_producto,
-            x="Frecuencia",
-            y="Descripcion",
-            orientation="h",
-            text_auto=".2s",
-            color_discrete_sequence=[COLOR_PRINCIPAL]
-        )
-
-        fig_producto.update_layout(
-            xaxis_title="Número de líneas",
-            yaxis_title=""
-        )
-
-    fig_producto.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-
-    st.plotly_chart(
-        fig_producto,
-        use_container_width=True
-    )
-
-
-with col_composicion:
-
-    st.subheader("Productos y servicios por ciudad")
-
-    datos_composicion = (
-        df_filtrado
-        .groupby(
-            ["Ciudad", "Tipo"],
-            as_index=False
-        )["Valor Total"]
-        .sum()
-    )
-
-    fig_composicion = px.bar(
-        datos_composicion,
-        x="Valor Total",
-        y="Ciudad",
-        color="Tipo",
-        orientation="h",
-        barmode="stack",
-        color_discrete_map={
-            "Producto": COLOR_PRINCIPAL,
-            "Servicio": COLOR_TERCIARIO
-        }
-    )
-
-    fig_composicion.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_title="Ventas sin IVA",
-        yaxis_title="",
-        legend_title=""
-    )
-
-    st.plotly_chart(
-        fig_composicion,
-        use_container_width=True
-    )
-
-
-# =====================================================
-# TABLAS DETALLADAS
-# =====================================================
-
-st.subheader("Análisis detallado")
-
-tab_clientes, tab_pagos, tab_detalle = st.tabs(
-    [
-        "Ventas por cliente",
-        "Forma de pago",
-        "Detalle de facturas"
-    ]
+st.dataframe(
+    df,
+    use_container_width=True,
+    hide_index=True
 )
-
-
-with tab_clientes:
-
-    ventas_cliente = (
-        df_filtrado
-        .groupby(["Cliente", "Ciudad"])
-        .agg(
-            Ventas=("Valor Total", "sum"),
-            Facturas=("Factura #", "nunique")
-        )
-        .reset_index()
-        .sort_values("Ventas", ascending=False)
-    )
-
-    ventas_cliente["Ticket promedio"] = (
-        ventas_cliente["Ventas"] /
-        ventas_cliente["Facturas"]
-    )
-
-    st.dataframe(
-        ventas_cliente.style.format(
-            {
-                "Ventas": "${:,.0f}",
-                "Ticket promedio": "${:,.0f}"
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-with tab_pagos:
-
-    ventas_pago = (
-        df_filtrado
-        .groupby(
-            "Forma de Pago",
-            as_index=False
-        )["Valor Total"]
-        .sum()
-        .sort_values("Valor Total", ascending=False)
-    )
-
-    total_pago = ventas_pago["Valor Total"].sum()
-
-    if total_pago > 0:
-        ventas_pago["Participación %"] = (
-            ventas_pago["Valor Total"] /
-            total_pago
-        ) * 100
-    else:
-        ventas_pago["Participación %"] = 0
-
-    st.dataframe(
-        ventas_pago.style.format(
-            {
-                "Valor Total": "${:,.0f}",
-                "Participación %": "{:.1f}%"
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-with tab_detalle:
-
-    columnas_mostrar = [
-        "Factura #",
-        "Fecha",
-        "Cliente",
-        "Nit",
-        "Ciudad",
-        "Vendedor",
-        "Codigo Articulo",
-        "Descripcion",
-        "Unidad",
-        "Cantidad",
-        "Precio Unitario",
-        "Valor Total"
-    ]
-
-    st.dataframe(
-        df_filtrado[columnas_mostrar].style.format(
-            {
-                "Cantidad": "{:,.2f}",
-                "Precio Unitario": "${:,.0f}",
-                "Valor Total": "${:,.0f}"
-            }
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
