@@ -95,11 +95,6 @@ st.markdown("""
 .sr .t { height:10px; background:#eef1f5; border-radius:6px; overflow:hidden; }
 .sr .t i { display:block; height:100%; border-radius:6px; }
 .sr .v { font-weight:700; color:#1C2363; white-space:nowrap; text-align:right; }
-.tabla-wrap { max-height:520px; overflow:auto; border:1px solid #e1e6ec; border-radius:8px; }
-.tabla-wrap table { width:100%; border-collapse:collapse; font-size:13px; }
-.tabla-wrap th { position:sticky; top:0; z-index:1; background:#E4E9F5; color:#1C2363; font-weight:700; text-align:left; padding:10px; border-bottom:2px solid #1C2363; white-space:nowrap; }
-.tabla-wrap td { padding:8px 10px; border-bottom:1px solid #e1e6ec; vertical-align:top; color:#2D2D2D; }
-.tabla-wrap tr:hover td { background:#f7f9fc; }
 #MainMenu, footer { visibility:hidden; }
 
 /* Ocultar elementos predeterminados de Streamlit */
@@ -705,19 +700,7 @@ with c2:
 # -----------------------------------------------------------------------------
 st.markdown('<div class="section-title">📋 Detalle de facturación</div>', unsafe_allow_html=True)
 with st.container(border=True):
-    limite = 500
-    tabla = df.sort_values("Fecha", ascending=False).head(limite).copy()
-    tabla["Fecha"] = tabla["Fecha"].dt.strftime("%d/%m/%Y").fillna("")
-
-    def _num(v):
-        return "" if pd.isna(v) else fnum(v, 0 if float(v).is_integer() else 2)
-
-    def _cop(v):
-        return "" if pd.isna(v) else cop(v)
-
-    formatos = {k: f for k, f in {"Cantidad": _num, "Precio Unitario": _cop, "Valor Total": _cop}.items() if k in tabla.columns}
-    html_tabla = tabla.to_html(index=False, escape=True, border=0, na_rep="", formatters=formatos).replace("\n", "")
-    st.markdown(f'<div class="tabla-wrap">{html_tabla}</div>', unsafe_allow_html=True)
-    st.caption(f"Mostrando las {len(tabla)} líneas más recientes de {len(df)}." if len(df) > limite else f"{len(df)} líneas de detalle.")
-    with st.expander("Ver tabla interactiva completa (ordenar y buscar)"):
-        st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        df, use_container_width=True, hide_index=True,
+        column_config={"Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")},
+    )
