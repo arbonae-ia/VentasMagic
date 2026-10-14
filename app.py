@@ -13,7 +13,7 @@ from google.oauth2.service_account import Credentials
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="Cuadro de Ventas Magic Print", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Magic Print Analytics", page_icon="📊", layout="wide")
 
 st.markdown("""
 <style>
