@@ -7,9 +7,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 
-# ===================================================
-# CONFIGURACIÓN GENERAL
-# ===================================================
+# =====================================================
+# CONFIGURACIÓN
+# =====================================================
 
 st.set_page_config(
     page_title="Magic Print Analytics",
@@ -26,6 +26,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
+NOMBRE_ARCHIVO = "Base_Datos_Ventas"
+NOMBRE_PESTANA = "Hoja1"
+
 
 st.markdown(
     """
@@ -34,7 +37,7 @@ st.markdown(
         background-color: #ffffff;
         border-radius: 10px;
         padding: 18px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         border-left: 5px solid #2563EB;
         margin-bottom: 20px;
     }
@@ -66,41 +69,51 @@ st.markdown(
 )
 
 
-# ===================================================
-# CARGA Y LIMPIEZA DE GOOGLE SHEETS
-# ===================================================
+# =====================================================
+# BOTÓN PARA ACTUALIZAR DATOS
+# =====================================================
+
+st.sidebar.title("Filtros de análisis")
+
+if st.sidebar.button("Actualizar datos"):
+    st.cache_data.clear()
+    st.rerun()
+
+
+# =====================================================
+# CARGA DE DATOS DESDE GOOGLE SHEETS
+# =====================================================
 
 @st.cache_data(ttl=600)
 def cargar_y_limpiar_datos():
 
-    # Crear credenciales
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=SCOPES
     )
 
-    # Autorizar conexión
     client = gspread.authorize(credentials)
 
-    # Abrir archivo de Google Sheets
-    spreadsheet = client.open("Base_Datos_Ventas")
+    spreadsheet = client.open(NOMBRE_ARCHIVO)
 
-    # Seleccionar la pestaña exacta
-    worksheet = spreadsheet.worksheet("Hoja1")
+    worksheet = spreadsheet.worksheet(NOMBRE_PESTANA)
 
-    # Leer todos los valores
     data = worksheet.get_all_values()
 
+    # Hoja sin datos
     if not data:
-        raise ValueError(
-            "La pestaña Hoja1 está vacía."
-        )
+        return pd.DataFrame()
 
+    # Hoja con encabezados, pero sin registros
     if len(data) < 2:
-        raise ValueError(
-            "La pestaña Hoja1 tiene encabezados, "
-            "pero no contiene registros."
-        )
+        encabezados = [
+            str(columna)
+            .replace("\ufeff", "")
+            .strip()
+            for columna in data[0]
+        ]
+
+        return pd.DataFrame(columns=encabezados)
 
     # Primera fila como encabezados
     encabezados = [
@@ -110,15 +123,18 @@ def cargar_y_limpiar_datos():
         for columna in data[0]
     ]
 
-    # Crear DataFrame
     df = pd.DataFrame(
         data[1:],
         columns=encabezados
     )
 
-    # Limpiar filas completamente vacías
+    # Eliminar filas completamente vacías
     df = df.replace("", np.nan)
     df = df.dropna(how="all").copy()
+
+    # Si después de limpiar no quedan registros
+    if df.empty:
+        return df
 
     # Normalizar nombres de columnas
     df.columns = (
@@ -128,7 +144,6 @@ def cargar_y_limpiar_datos():
         .str.strip()
     )
 
-    # Normalizar posibles variaciones de nombres
     equivalencias = {
         "Código Articulo": "Codigo Articulo",
         "Código Artículo": "Codigo Articulo",
@@ -170,11 +185,11 @@ def cargar_y_limpiar_datos():
             f"Columnas encontradas: {list(df.columns)}"
         )
 
-    # Forma de pago es opcional
+    # Forma de pago opcional
     if "Forma de Pago" not in df.columns:
         df["Forma de Pago"] = "No registrada"
 
-    # Limpiar campos de texto
+    # Limpieza de textos
     columnas_texto = [
         "Factura #",
         "Cliente",
@@ -192,19 +207,13 @@ def cargar_y_limpiar_datos():
             .str.strip()
         )
 
-    # Convertir fecha
+    # Fecha
     df["Fecha"] = pd.to_datetime(
         df["Fecha"],
         errors="coerce"
     )
 
-    if df["Fecha"].isna().all():
-        raise ValueError(
-            "La columna Fecha existe, "
-            "pero no contiene fechas válidas."
-        )
-
-    # Convertir cantidad
+    # Cantidad
     df["Cantidad"] = (
         df["Cantidad"]
         .astype(str)
@@ -218,7 +227,7 @@ def cargar_y_limpiar_datos():
         errors="coerce"
     ).fillna(0)
 
-    # Convertir precio unitario
+    # Precio unitario
     df["Precio Unitario"] = (
         df["Precio Unitario"]
         .astype(str)
@@ -232,7 +241,7 @@ def cargar_y_limpiar_datos():
         errors="coerce"
     ).fillna(0)
 
-    # Convertir valor total
+    # Valor total
     df["Valor Total"] = (
         df["Valor Total"]
         .astype(str)
@@ -246,7 +255,7 @@ def cargar_y_limpiar_datos():
         errors="coerce"
     ).fillna(0)
 
-    # Convertir IVA
+    # IVA
     df["% IVA"] = (
         df["% IVA"]
         .astype(str)
@@ -261,7 +270,7 @@ def cargar_y_limpiar_datos():
         errors="coerce"
     ).fillna(0)
 
-    # Clasificar productos y servicios
+    # Clasificación de productos y servicios
     codigos_servicios = [
         "888912",
         "888923",
@@ -274,7 +283,7 @@ def cargar_y_limpiar_datos():
         "Producto"
     )
 
-    # Calcular ventas con IVA
+    # Ventas con IVA
     df["Ventas con IVA"] = (
         df["Valor Total"] *
         (1 + df["% IVA"] / 100)
@@ -283,9 +292,9 @@ def cargar_y_limpiar_datos():
     return df
 
 
-# ===================================================
-# EJECUTAR CARGA
-# ===================================================
+# =====================================================
+# EJECUCIÓN DE LA CARGA
+# =====================================================
 
 try:
     df_base = cargar_y_limpiar_datos()
@@ -298,20 +307,35 @@ except Exception as error:
     st.stop()
 
 
+# Mensaje para hoja vacía
 if df_base.empty:
-    st.warning(
-        "La pestaña Hoja1 no contiene registros."
+    st.title("Magic Print Analytics")
+
+    st.info(
+        "La conexión con Google Sheets funciona correctamente, "
+        "pero la pestaña Hoja1 todavía no contiene registros."
     )
+
+    st.write(
+        "Carga los datos desde la fila 2, manteniendo los encabezados "
+        "en la fila 1."
+    )
+
+    st.write("Cuando termines, pulsa el botón **Actualizar datos**.")
     st.stop()
 
 
-# ===================================================
+# =====================================================
 # FILTROS
-# ===================================================
-
-st.sidebar.title("Filtros de análisis")
+# =====================================================
 
 fechas_validas = df_base["Fecha"].dropna()
+
+if fechas_validas.empty:
+    st.error(
+        "No existen fechas válidas en la columna Fecha."
+    )
+    st.stop()
 
 fecha_min = fechas_validas.min().date()
 fecha_max = fechas_validas.max().date()
@@ -327,6 +351,7 @@ df_filtrado = df_base.copy()
 
 if isinstance(rango_fechas, tuple):
     if len(rango_fechas) == 2:
+
         fecha_inicio = pd.to_datetime(rango_fechas[0])
         fecha_fin = pd.to_datetime(rango_fechas[1])
 
@@ -338,7 +363,7 @@ if isinstance(rango_fechas, tuple):
 
 ciudades = st.sidebar.multiselect(
     "Ciudad",
-    sorted(df_filtrado["Ciudad"].unique())
+    sorted(df_filtrado["Ciudad"].dropna().unique())
 )
 
 if ciudades:
@@ -349,7 +374,7 @@ if ciudades:
 
 vendedores = st.sidebar.multiselect(
     "Vendedor",
-    sorted(df_filtrado["Vendedor"].unique())
+    sorted(df_filtrado["Vendedor"].dropna().unique())
 )
 
 if vendedores:
@@ -360,7 +385,7 @@ if vendedores:
 
 clientes = st.sidebar.multiselect(
     "Cliente",
-    sorted(df_filtrado["Cliente"].unique())
+    sorted(df_filtrado["Cliente"].dropna().unique())
 )
 
 if clientes:
@@ -371,7 +396,7 @@ if clientes:
 
 tipos = st.sidebar.multiselect(
     "Tipo",
-    sorted(df_filtrado["Tipo"].unique())
+    sorted(df_filtrado["Tipo"].dropna().unique())
 )
 
 if tipos:
@@ -387,9 +412,9 @@ if df_filtrado.empty:
     st.stop()
 
 
-# ===================================================
+# =====================================================
 # KPIs
-# ===================================================
+# =====================================================
 
 facturas_unicas = df_filtrado["Factura #"].nunique()
 clientes_unicos = df_filtrado["Cliente"].nunique()
@@ -430,15 +455,14 @@ def mostrar_kpi(
     )
 
 
-# ===================================================
-# ENCABEZADO DEL DASHBOARD
-# ===================================================
+# =====================================================
+# ENCABEZADO Y KPIs
+# =====================================================
 
 st.title("Resumen Ejecutivo de Ventas")
 
 st.caption(
-    "Información tomada de la pestaña Hoja1 "
-    "del archivo Base_Datos_Ventas."
+    "Fuente: Base_Datos_Ventas / Hoja1"
 )
 
 st.markdown("---")
@@ -485,9 +509,9 @@ mostrar_kpi(
 )
 
 
-# ===================================================
+# =====================================================
 # TENDENCIA DE VENTAS
-# ===================================================
+# =====================================================
 
 st.subheader("Tendencia de ventas")
 
@@ -518,9 +542,9 @@ st.plotly_chart(
 )
 
 
-# ===================================================
+# =====================================================
 # VENTAS POR CIUDAD Y VENDEDOR
-# ===================================================
+# =====================================================
 
 col_ciudad, col_vendedor = st.columns(2)
 
@@ -601,9 +625,9 @@ with col_vendedor:
     )
 
 
-# ===================================================
+# =====================================================
 # PRODUCTOS Y SERVICIOS
-# ===================================================
+# =====================================================
 
 col_producto, col_tipo = st.columns(2)
 
@@ -710,7 +734,10 @@ with col_tipo:
 
     datos_tipo = (
         df_filtrado
-        .groupby(["Ciudad", "Tipo"], as_index=False)["Valor Total"]
+        .groupby(
+            ["Ciudad", "Tipo"],
+            as_index=False
+        )["Valor Total"]
         .sum()
     )
 
@@ -740,9 +767,9 @@ with col_tipo:
     )
 
 
-# ===================================================
+# =====================================================
 # TABLAS DETALLADAS
-# ===================================================
+# =====================================================
 
 st.subheader("Análisis detallado")
 
