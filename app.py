@@ -320,7 +320,7 @@ if "uploader_version" not in st.session_state:
 col_izq, col_der = st.columns([8, 1])
 with col_izq:
     st.markdown("""
-        <div class="main-title">Magic Print Analytics</div>
+        <div class="main-title">Cuadro de Ventas Magic Print</div>
         <div class="main-subtitle">Seguimiento de ventas, facturación y desempeño comercial</div>
     """, unsafe_allow_html=True)
 with col_der:
