@@ -1,8 +1,0 @@
-streamlit
-pandas
-numpy
-plotly
-gspread
-google-auth
-pdfplumber
-Pillow
