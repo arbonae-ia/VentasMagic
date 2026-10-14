@@ -10,7 +10,24 @@ import plotly.express as px
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
+# -----------------------------------------------------------------------------
+# ENCABEZADO PRINCIPAL CON LOGOTIPO
+# -----------------------------------------------------------------------------
+col_izq, col_der = st.columns([8, 1])
+with col_izq:
+    st.markdown("""
+        <div class="main-title" style="margin-bottom:0;">Magic Print Analytics</div>
+        <div class="main-subtitle" style="margin-top:4px;">Seguimiento inteligente de ventas, facturación y análisis comercial</div>
+    """, unsafe_allow_html=True)
+with col_der:
+    st.image("logo.png", width=70)
 
+if st.session_state["mensaje_carga"]:
+    st.success(st.session_state.pop("mensaje_carga"))
+
+hoja = conectar_hoja()
+if hoja is None:
+    st.stop()
 st.set_page_config(page_title="Magic Print Analytics", page_icon="📊", layout="wide")
 
 NOMBRE_ARCHIVO = "Base_Datos_Ventas"
