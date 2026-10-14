@@ -323,7 +323,7 @@ with col_izq:
     """, unsafe_allow_html=True)
 with col_der:
     try:
-        st.image("logo.png", width=70)
+        st.image("logo.jpg", width=70)
     except Exception:
         st.write("📊")
 
