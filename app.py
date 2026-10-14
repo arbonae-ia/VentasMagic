@@ -10,8 +10,89 @@ import plotly.express as px
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
-
+# -----------------------------------------------------------------------------
+# CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
+# -----------------------------------------------------------------------------
 st.set_page_config(page_title="Magic Print Analytics", page_icon="📊", layout="wide")
+
+st.markdown("""
+<style>
+/* Estilos generales y tipografía */
+.main-header {
+    background: #ffffff;
+    padding: 20px 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(30, 60, 90, 0.06);
+    border-left: 6px solid #2563EB;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.main-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0F172A;
+    margin: 0;
+}
+.main-subtitle {
+    color: #64748B;
+    font-size: 14px;
+    margin-top: 4px;
+}
+.section-title {
+    color: #0F172A;
+    font-size: 20px;
+    font-weight: 700;
+    margin: 30px 0 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Tarjetas KPI mejoradas */
+.kpi-card {
+    background: #ffffff;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    min-height: 105px;
+    box-shadow: 0 2px 6px rgba(30, 60, 90, 0.04);
+    transition: all 0.3s ease;
+}
+.kpi-card:hover {
+    box-shadow: 0 4px 12px rgba(30, 60, 90, 0.08);
+    transform: translateY(-2px);
+}
+.kpi-card.blue { border-left: 4px solid #2563EB; }
+.kpi-card.green { border-left: 4px solid #10B981; }
+.kpi-card.purple { border-left: 4px solid #8B5CF6; }
+.kpi-card.orange { border-left: 4px solid #F59E0B; }
+
+.kpi-title {
+    color: #64748B;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+.kpi-value {
+    color: #0F172A;
+    font-size: 24px;
+    font-weight: 700;
+}
+.small-note {
+    color: #64748B;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* Ocultar elementos predeterminados molestos */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 
 NOMBRE_ARCHIVO = "Base_Datos_Ventas"
 NOMBRE_PESTANA = "Hoja1"
@@ -35,22 +116,9 @@ MESES_PDF = {
 
 CODIGOS_SERVICIO = {"888912", "888923", "888916"}
 
-st.markdown("""
-<style>
-.main-title{font-size:42px;font-weight:700;color:#19324d;margin-bottom:25px}
-.section-title{color:#19324d;font-size:25px;font-weight:700;margin:25px 0 15px}
-.kpi-card{background:#eef4fb;border:1px solid #c8d8e8;border-radius:14px;padding:18px 12px;min-height:115px;box-shadow:0 2px 6px rgba(30,60,90,.10)}
-.kpi-card.green{background:#edf8f2;border-color:#b9dfc9}
-.kpi-card.orange{background:#fff7e8;border-color:#f0d59a}
-.kpi-card.purple{background:#f3effb;border-color:#d8c9ef}
-.kpi-card.blue{background:#edf5ff;border-color:#c3d8f5}
-.kpi-title{color:#637384;font-size:14px;margin-bottom:8px}
-.kpi-value{color:#19324d;font-size:25px;font-weight:700}
-.small-note{color:#667685;font-size:13px}
-</style>
-""", unsafe_allow_html=True)
-
-
+# -----------------------------------------------------------------------------
+# FUNCIONES DE CONEXIÓN Y ETL
+# -----------------------------------------------------------------------------
 @st.cache_resource
 def conectar_hoja():
     try:
@@ -63,16 +131,13 @@ def conectar_hoja():
         st.error(f"No fue posible conectar con Google Sheets: {error}")
         return None
 
-
 def limpiar_texto(valor):
     if valor is None:
         return ""
     return re.sub(r"\s+", " ", str(valor).replace("\xa0", " ")).strip()
 
-
 def limpiar_nit(valor):
     return re.sub(r"[^0-9]", "", limpiar_texto(valor))
-
 
 def convertir_numero(valor):
     texto = limpiar_texto(valor).replace("$", "").replace(" ", "")
@@ -93,7 +158,6 @@ def convertir_numero(valor):
     except Exception:
         return 0.0
 
-
 def convertir_fecha_pdf(fecha):
     partes = limpiar_texto(fecha).replace("−", "-").replace("–", "-").split("-")
     if len(partes) != 3:
@@ -106,10 +170,8 @@ def convertir_fecha_pdf(fecha):
     except Exception:
         return ""
 
-
 def clasificar_tipo_venta(codigo):
     return "Servicio" if limpiar_texto(codigo) in CODIGOS_SERVICIO else "Bases Textiles"
-
 
 def extraer_datos_pdf(archivo_pdf):
     registros = []
@@ -168,7 +230,6 @@ def extraer_datos_pdf(archivo_pdf):
         raise ValueError("No se encontraron líneas de productos o servicios.")
     return registros
 
-
 def obtener_informacion_duplicados(hoja, registros_pdf):
     datos = hoja.get_all_values()
     facturas_pdf = {limpiar_texto(r[0]) for r in registros_pdf}
@@ -190,19 +251,16 @@ def obtener_informacion_duplicados(hoja, registros_pdf):
         "facturas_nuevas": facturas_pdf - existentes,
     }
 
-
 def agregar_facturas_nuevas(hoja, registros_pdf, facturas_existentes):
     nuevos = [r for r in registros_pdf if limpiar_texto(r[0]) not in facturas_existentes]
     if nuevos:
         hoja.append_rows(nuevos, value_input_option="USER_ENTERED")
     return nuevos
 
-
 def reemplazar_facturas(hoja, registros_pdf, filas_a_borrar):
     for fila in sorted(filas_a_borrar, reverse=True):
         hoja.delete_rows(fila)
     hoja.append_rows(registros_pdf, value_input_option="USER_ENTERED")
-
 
 @st.cache_data(ttl=30)
 def cargar_datos():
@@ -233,7 +291,6 @@ def cargar_datos():
         df["Tipo de Venta"] = df["Codigo Articulo"].apply(clasificar_tipo_venta)
     return df
 
-
 def aplicar_filtro_lista(dataframe, columna, titulo):
     if columna not in dataframe.columns:
         return dataframe
@@ -245,7 +302,9 @@ def aplicar_filtro_lista(dataframe, columna, titulo):
         dataframe = dataframe[dataframe[columna].astype(str).isin(seleccionados)]
     return dataframe
 
-
+# -----------------------------------------------------------------------------
+# ESTADOS DE SESIÓN
+# -----------------------------------------------------------------------------
 if "registros_pdf" not in st.session_state:
     st.session_state["registros_pdf"] = None
 if "mensaje_carga" not in st.session_state:
@@ -253,7 +312,21 @@ if "mensaje_carga" not in st.session_state:
 if "uploader_version" not in st.session_state:
     st.session_state["uploader_version"] = 0
 
-st.markdown('<div class="main-title">Magic Print Analytics</div>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# ENCABEZADO PRINCIPAL CON LOGOTIPO
+# -----------------------------------------------------------------------------
+st.markdown("""
+<div class="main-header">
+    <div>
+        <div class="main-title">Magic Print Analytics</div>
+        <div class="main-subtitle">Seguimiento inteligente de ventas, facturación y análisis comercial</div>
+    </div>
+    <div>
+        <img src="https://cdn-icons-png.flaticon.com/512/3061/3061341.png" width="55">
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 if st.session_state["mensaje_carga"]:
     st.success(st.session_state.pop("mensaje_carga"))
 
@@ -261,6 +334,9 @@ hoja = conectar_hoja()
 if hoja is None:
     st.stop()
 
+# -----------------------------------------------------------------------------
+# BARRA LATERAL (CARGA DE PDF Y FILTROS)
+# -----------------------------------------------------------------------------
 with st.sidebar:
     st.header("Cargar facturas PDF")
     archivo_pdf = st.file_uploader(
@@ -284,7 +360,7 @@ with st.sidebar:
 
 registros_pdf = st.session_state["registros_pdf"]
 if registros_pdf:
-    st.markdown('<div class="section-title">Vista previa del PDF</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📦 Vista previa del PDF</div>', unsafe_allow_html=True)
     df_pdf = pd.DataFrame(registros_pdf, columns=COLUMNAS)
     st.caption(f"Se encontraron {len(df_pdf)} líneas de {df_pdf['Factura #'].nunique()} facturas.")
     st.dataframe(df_pdf, use_container_width=True, hide_index=True)
@@ -369,6 +445,9 @@ if "Fecha" in df.columns and not df["Fecha"].dropna().empty:
 for columna, titulo in [("Ciudad", "Ciudad"), ("Vendedor", "Vendedor"), ("Cliente", "Cliente"), ("Unidad", "Unidad"), ("Tipo de Venta", "Tipo de venta")]:
     df = aplicar_filtro_lista(df, columna, titulo)
 
+# -----------------------------------------------------------------------------
+# CÁLCULOS DE MÉTRICAS Y KPIS
+# -----------------------------------------------------------------------------
 ventas = df["Valor Total"].sum()
 facturas = df["Factura #"].nunique()
 clientes = df["Cliente"].nunique()
@@ -384,7 +463,10 @@ else:
     dia_mayor, valor_mayor = mayor["Fecha"].strftime("%d/%m/%Y"), mayor["Valor Total"]
     dia_menor, valor_menor = menor["Fecha"].strftime("%d/%m/%Y"), menor["Valor Total"]
 
-st.markdown('<div class="section-title">Indicadores comerciales</div>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# RENDERIZADO DE INDICADORES COMERCIALES (KPI CARDS)
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section-title">📊 Indicadores comerciales</div>', unsafe_allow_html=True)
 kpis = [
     ("Ventas sin IVA", f"${ventas:,.0f}", "blue"),
     ("Facturas realizadas", f"{facturas:,.0f}", "green"),
@@ -397,25 +479,34 @@ for col, (titulo, valor, color) in zip(cols, kpis):
     with col:
         st.markdown(f'<div class="kpi-card {color}"><div class="kpi-title">{titulo}</div><div class="kpi-value">{valor}</div></div>', unsafe_allow_html=True)
 
-st.markdown('<div class="section-title">Días destacados</div>', unsafe_allow_html=True)
+# Días destacados
+st.markdown('<div class="section-title">⭐ Días destacados</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
     st.markdown(f'<div class="kpi-card green"><div class="kpi-title">Día de mayor venta</div><div class="kpi-value">{dia_mayor}</div><div class="small-note">${valor_mayor:,.0f} vendidos</div></div>', unsafe_allow_html=True)
 with c2:
     st.markdown(f'<div class="kpi-card orange"><div class="kpi-title">Día de menor venta</div><div class="kpi-value">{dia_menor}</div><div class="small-note">${valor_menor:,.0f} vendidos</div></div>', unsafe_allow_html=True)
 
-
 def mostrar_grafico(figura):
-    figura.update_layout(height=390, margin=dict(l=20, r=20, t=60, b=20))
+    figura.update_layout(
+        height=380,
+        margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="sans-serif", size=12, color="#334155")
+    )
     st.plotly_chart(figura, use_container_width=True)
 
+# -----------------------------------------------------------------------------
+# BLOQUE DE GRÁFICOS Y ANÁLISIS COMERCIAL
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section-title">📈 Análisis comercial detallado</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="section-title">Análisis comercial</div>', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
     with st.container(border=True):
         datos = df.groupby("Fecha", as_index=False)["Valor Total"].sum().sort_values("Fecha")
-        mostrar_grafico(px.line(datos, x="Fecha", y="Valor Total", markers=True, title="Evolución de ventas"))
+        mostrar_grafico(px.line(datos, x="Fecha", y="Valor Total", markers=True, title="Evolución diaria de ventas"))
 with c2:
     with st.container(border=True):
         datos = df.groupby("Ciudad", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False)
@@ -425,12 +516,15 @@ c1, c2 = st.columns(2)
 with c1:
     with st.container(border=True):
         datos = df.groupby("Vendedor", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False)
-        mostrar_grafico(px.bar(datos, x="Valor Total", y="Vendedor", orientation="h", color="Vendedor", title="Ventas por vendedor"))
+        mostrar_grafico(px.bar(datos, x="Valor Total", y="Vendedor", orientation="h", color="Vendedor", title="Desempeño por vendedor"))
 with c2:
     with st.container(border=True):
         datos = df.groupby("Descripcion", as_index=False)["Valor Total"].sum().sort_values("Valor Total", ascending=False).head(15)
-        mostrar_grafico(px.bar(datos, x="Valor Total", y="Descripcion", orientation="h", color="Valor Total", title="Productos y servicios más vendidos"))
+        mostrar_grafico(px.bar(datos, x="Valor Total", y="Descripcion", orientation="h", color="Valor Total", title="Top productos y servicios más vendidos"))
 
-st.markdown('<div class="section-title">Detalle de facturación</div>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# TABLA DE DETALLE
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section-title">📋 Detalle de facturación</div>', unsafe_allow_html=True)
 with st.container(border=True):
     st.dataframe(df, use_container_width=True, hide_index=True)
