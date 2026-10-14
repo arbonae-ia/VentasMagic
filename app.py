@@ -1,7 +1,11 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
+import io
+import re
+
 import numpy as np
+import pandas as pd
+import pdfplumber
+import plotly.express as px
+import streamlit as st
 import gspread
 
 from google.oauth2.service_account import Credentials
@@ -28,6 +32,23 @@ SCOPES = [
 
 NOMBRE_ARCHIVO = "Base_Datos_Ventas"
 NOMBRE_PESTANA = "Hoja1"
+
+COLUMNAS_GOOGLE_SHEETS = [
+    "Factura #",
+    "Fecha",
+    "Cliente",
+    "Nit",
+    "Ciudad",
+    "Vendedor",
+    "Codigo Articulo",
+    "Descripcion",
+    "Unidad",
+    "Cantidad",
+    "Precio Unitario",
+    "Valor Total",
+    "% IVA",
+    "Forma de Pago"
+]
 
 
 st.markdown(
@@ -70,23 +91,11 @@ st.markdown(
 
 
 # =====================================================
-# BOTÓN PARA ACTUALIZAR DATOS
+# CONEXIÓN CON GOOGLE SHEETS
 # =====================================================
 
-st.sidebar.title("Filtros de análisis")
-
-if st.sidebar.button("Actualizar datos"):
-    st.cache_data.clear()
-    st.rerun()
-
-
-# =====================================================
-# CARGA DE DATOS DESDE GOOGLE SHEETS
-# =====================================================
-
-@st.cache_data(ttl=600)
-def cargar_y_limpiar_datos():
-
+@st.cache_resource
+def conectar_hoja():
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=SCOPES
@@ -98,14 +107,377 @@ def cargar_y_limpiar_datos():
 
     worksheet = spreadsheet.worksheet(NOMBRE_PESTANA)
 
+    return worksheet
+
+
+# =====================================================
+# FUNCIONES DE CONVERSIÓN
+# =====================================================
+
+MESES_PDF = {
+    "ENE": "01",
+    "FEB": "02",
+    "MAR": "03",
+    "ABR": "04",
+    "MAY": "05",
+    "JUN": "06",
+    "JUL": "07",
+    "AGO": "08",
+    "SEP": "09",
+    "OCT": "10",
+    "NOV": "11",
+    "DIC": "12"
+}
+
+
+def convertir_numero(valor):
+    if valor is None:
+        return 0
+
+    texto = str(valor).strip()
+    texto = texto.replace("−", "-")
+    texto = texto.replace(",", "")
+
+    try:
+        return float(texto)
+    except ValueError:
+        return 0
+
+
+def convertir_fecha_pdf(fecha_pdf):
+    if not fecha_pdf:
+        return ""
+
+    fecha_limpia = (
+        str(fecha_pdf)
+        .replace("−", "-")
+        .strip()
+        .upper()
+    )
+
+    partes = fecha_limpia.split("-")
+
+    if len(partes) != 3:
+        return ""
+
+    anio = partes[0]
+    mes_texto = partes[1]
+    dia = partes[2]
+
+    mes = MESES_PDF.get(mes_texto)
+
+    if not mes:
+        return ""
+
+    return f"{anio}-{mes}-{dia}"
+
+
+def limpiar_nit(nit):
+    if not nit:
+        return ""
+
+    nit = (
+        str(nit)
+        .replace("−", "-")
+        .strip()
+    )
+
+    if "-" in nit:
+        nit = nit.split("-")[0]
+
+    return nit.strip()
+
+
+# =====================================================
+# EXTRACCIÓN DEL PDF
+# =====================================================
+
+def extraer_datos_pdf(archivo_pdf):
+
+    registros = []
+
+    contenido_pdf = archivo_pdf.getvalue()
+
+    patron_factura = re.compile(
+        r"Numero\s*:\s*(FM[-−]\d+)",
+        re.IGNORECASE
+    )
+
+    patron_fecha = re.compile(
+        r"Fecha\s*:\s*(\d{4}[-−][A-Z]{3}[-−]\d{2})",
+        re.IGNORECASE
+    )
+
+    patron_cliente = re.compile(
+        r"Cliente\s*:\s*([^|\n]+)",
+        re.IGNORECASE
+    )
+
+    patron_nit = re.compile(
+        r"Nit o C\.C\.\s*:\s*([0-9−-]+)",
+        re.IGNORECASE
+    )
+
+    patron_ciudad = re.compile(
+        r"Ciudad\s*:\s*([^|\n]+)",
+        re.IGNORECASE
+    )
+
+    patron_vendedor = re.compile(
+        r"Vendedor:\s*\d+\s*(?:\|?\s*)([^|\n]+)",
+        re.IGNORECASE
+    )
+
+    patron_pago = re.compile(
+        r"\|\s*(CREDITO[^|]+|CONTADO[^|]+)\s*\|",
+        re.IGNORECASE
+    )
+
+    # Acepta MTS, KLS y otras unidades de hasta cuatro letras.
+    patron_item = re.compile(
+        r"^(\d{3,10})\s+(.+?)\s+"
+        r"(\d+)\s+"
+        r"([\d,.]+)\s+"
+        r"([A-Z]{2,4})\s+"
+        r"([\d,.−-]+)\s+"
+        r"([\d,.−-]+)\s+"
+        r"([\d,.−-]+)"
+        r"(?:\s+([\d,.−-]+)\*)?$",
+        re.IGNORECASE
+    )
+
+    with pdfplumber.open(io.BytesIO(contenido_pdf)) as pdf:
+
+        for pagina in pdf.pages:
+
+            texto = pagina.extract_text() or ""
+
+            if not texto.strip():
+                continue
+
+            factura_match = patron_factura.search(texto)
+
+            if not factura_match:
+                continue
+
+            factura = (
+                factura_match.group(1)
+                .replace("−", "-")
+                .strip()
+            )
+
+            fecha_match = patron_fecha.search(texto)
+
+            fecha = (
+                convertir_fecha_pdf(
+                    fecha_match.group(1)
+                )
+                if fecha_match
+                else ""
+            )
+
+            cliente_match = patron_cliente.search(texto)
+
+            cliente = (
+                cliente_match.group(1).strip()
+                if cliente_match
+                else ""
+            )
+
+            nit_match = patron_nit.search(texto)
+
+            nit = (
+                limpiar_nit(nit_match.group(1))
+                if nit_match
+                else ""
+            )
+
+            ciudad_match = patron_ciudad.search(texto)
+
+            ciudad = (
+                ciudad_match.group(1)
+                .split("+")[0]
+                .strip()
+                if ciudad_match
+                else ""
+            )
+
+            vendedor_match = patron_vendedor.search(texto)
+
+            vendedor = (
+                vendedor_match.group(1).strip()
+                if vendedor_match
+                else ""
+            )
+
+            pago_match = patron_pago.search(texto)
+
+            forma_pago = (
+                pago_match.group(1).strip()
+                if pago_match
+                else "No registrada"
+            )
+
+            for linea in texto.splitlines():
+
+                linea_limpia = (
+                    linea
+                    .strip()
+                    .strip("|")
+                    .strip()
+                )
+
+                item_match = patron_item.match(
+                    linea_limpia
+                )
+
+                if not item_match:
+                    continue
+
+                codigo = item_match.group(1)
+                descripcion = item_match.group(2).strip()
+
+                cantidad = convertir_numero(
+                    item_match.group(4)
+                )
+
+                unidad = item_match.group(5).upper()
+
+                precio_unitario = convertir_numero(
+                    item_match.group(6)
+                )
+
+                valor_total = convertir_numero(
+                    item_match.group(8)
+                )
+
+                iva = (
+                    convertir_numero(item_match.group(9))
+                    if item_match.group(9)
+                    else (
+                        19
+                        if "*" in linea
+                        else 0
+                    )
+                )
+
+                registros.append([
+                    factura,
+                    fecha,
+                    cliente,
+                    nit,
+                    ciudad,
+                    vendedor,
+                    codigo,
+                    descripcion,
+                    unidad,
+                    cantidad,
+                    precio_unitario,
+                    valor_total,
+                    iva,
+                    forma_pago
+                ])
+
+    return registros
+
+
+# =====================================================
+# CONTROL DE DUPLICADOS
+# =====================================================
+
+def normalizar_clave(valor):
+    return str(valor).strip().upper()
+
+
+def obtener_clave_registro(fila):
+
+    factura = normalizar_clave(fila[0])
+    codigo = normalizar_clave(fila[6])
+    valor = round(convertir_numero(fila[11]), 2)
+
+    return factura, codigo, valor
+
+
+def filtrar_registros_nuevos(worksheet, registros):
+
+    datos_existentes = worksheet.get_all_values()
+
+    if len(datos_existentes) < 2:
+        return registros
+
+    encabezados = [
+        str(valor).strip()
+        for valor in datos_existentes[0]
+    ]
+
+    posiciones = {
+        nombre: indice
+        for indice, nombre in enumerate(encabezados)
+    }
+
+    requeridas = [
+        "Factura #",
+        "Codigo Articulo",
+        "Valor Total"
+    ]
+
+    if not all(
+        columna in posiciones
+        for columna in requeridas
+    ):
+        return registros
+
+    claves_existentes = set()
+
+    for fila in datos_existentes[1:]:
+
+        if not fila:
+            continue
+
+        try:
+            factura = fila[posiciones["Factura #"]]
+            codigo = fila[posiciones["Codigo Articulo"]]
+            valor = fila[posiciones["Valor Total"]]
+
+            clave = (
+                normalizar_clave(factura),
+                normalizar_clave(codigo),
+                round(convertir_numero(valor), 2)
+            )
+
+            claves_existentes.add(clave)
+
+        except IndexError:
+            continue
+
+    registros_nuevos = []
+
+    for registro in registros:
+
+        clave = obtener_clave_registro(registro)
+
+        if clave not in claves_existentes:
+            registros_nuevos.append(registro)
+
+    return registros_nuevos
+
+
+# =====================================================
+# CARGA Y LIMPIEZA DE DATOS
+# =====================================================
+
+@st.cache_data(ttl=600)
+def cargar_y_limpiar_datos():
+
+    worksheet = conectar_hoja()
+
     data = worksheet.get_all_values()
 
-    # Hoja sin datos
     if not data:
         return pd.DataFrame()
 
-    # Hoja con encabezados, pero sin registros
     if len(data) < 2:
+
         encabezados = [
             str(columna)
             .replace("\ufeff", "")
@@ -115,7 +487,6 @@ def cargar_y_limpiar_datos():
 
         return pd.DataFrame(columns=encabezados)
 
-    # Primera fila como encabezados
     encabezados = [
         str(columna)
         .replace("\ufeff", "")
@@ -128,15 +499,12 @@ def cargar_y_limpiar_datos():
         columns=encabezados
     )
 
-    # Eliminar filas completamente vacías
     df = df.replace("", np.nan)
     df = df.dropna(how="all").copy()
 
-    # Si después de limpiar no quedan registros
     if df.empty:
         return df
 
-    # Normalizar nombres de columnas
     df.columns = (
         df.columns
         .astype(str)
@@ -151,7 +519,8 @@ def cargar_y_limpiar_datos():
         "Descripción": "Descripcion",
         "Precio Unitario ": "Precio Unitario",
         "Cantidad ": "Cantidad",
-        "% IVA ": "% IVA"
+        "% IVA ": "% IVA",
+        "Unidad ": "Unidad"
     }
 
     df.rename(
@@ -163,10 +532,12 @@ def cargar_y_limpiar_datos():
         "Factura #",
         "Fecha",
         "Cliente",
+        "Nit",
         "Ciudad",
         "Vendedor",
         "Codigo Articulo",
         "Descripcion",
+        "Unidad",
         "Cantidad",
         "Precio Unitario",
         "Valor Total",
@@ -185,18 +556,18 @@ def cargar_y_limpiar_datos():
             f"Columnas encontradas: {list(df.columns)}"
         )
 
-    # Forma de pago opcional
     if "Forma de Pago" not in df.columns:
         df["Forma de Pago"] = "No registrada"
 
-    # Limpieza de textos
     columnas_texto = [
         "Factura #",
         "Cliente",
+        "Nit",
         "Ciudad",
         "Vendedor",
         "Codigo Articulo",
         "Descripcion",
+        "Unidad",
         "Forma de Pago"
     ]
 
@@ -207,70 +578,33 @@ def cargar_y_limpiar_datos():
             .str.strip()
         )
 
-    # Fecha
     df["Fecha"] = pd.to_datetime(
         df["Fecha"],
         errors="coerce"
     )
 
-    # Cantidad
-    df["Cantidad"] = (
-        df["Cantidad"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .str.replace("$", "", regex=False)
-        .str.strip()
-    )
+    for columna in [
+        "Cantidad",
+        "Precio Unitario",
+        "Valor Total",
+        "% IVA"
+    ]:
 
-    df["Cantidad"] = pd.to_numeric(
-        df["Cantidad"],
-        errors="coerce"
-    ).fillna(0)
+        df[columna] = (
+            df[columna]
+            .astype(str)
+            .str.replace(",", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("%", "", regex=False)
+            .str.replace("*", "", regex=False)
+            .str.strip()
+        )
 
-    # Precio unitario
-    df["Precio Unitario"] = (
-        df["Precio Unitario"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .str.replace("$", "", regex=False)
-        .str.strip()
-    )
+        df[columna] = pd.to_numeric(
+            df[columna],
+            errors="coerce"
+        ).fillna(0)
 
-    df["Precio Unitario"] = pd.to_numeric(
-        df["Precio Unitario"],
-        errors="coerce"
-    ).fillna(0)
-
-    # Valor total
-    df["Valor Total"] = (
-        df["Valor Total"]
-        .astype(str)
-        .str.replace(",", "", regex=False)
-        .str.replace("$", "", regex=False)
-        .str.strip()
-    )
-
-    df["Valor Total"] = pd.to_numeric(
-        df["Valor Total"],
-        errors="coerce"
-    ).fillna(0)
-
-    # IVA
-    df["% IVA"] = (
-        df["% IVA"]
-        .astype(str)
-        .str.replace("%", "", regex=False)
-        .str.replace("*", "", regex=False)
-        .str.replace(",", ".", regex=False)
-        .str.strip()
-    )
-
-    df["% IVA"] = pd.to_numeric(
-        df["% IVA"],
-        errors="coerce"
-    ).fillna(0)
-
-    # Clasificación de productos y servicios
     codigos_servicios = [
         "888912",
         "888923",
@@ -283,7 +617,6 @@ def cargar_y_limpiar_datos():
         "Producto"
     )
 
-    # Ventas con IVA
     df["Ventas con IVA"] = (
         df["Valor Total"] *
         (1 + df["% IVA"] / 100)
@@ -293,35 +626,140 @@ def cargar_y_limpiar_datos():
 
 
 # =====================================================
-# EJECUCIÓN DE LA CARGA
+# BARRA LATERAL Y CARGA DE PDF
+# =====================================================
+
+st.sidebar.title("Filtros de análisis")
+
+if st.sidebar.button("Actualizar datos"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Cargar facturas PDF")
+
+archivo_pdf = st.sidebar.file_uploader(
+    "Selecciona un archivo PDF",
+    type=["pdf"],
+    help="Puedes subir un archivo con cualquier nombre."
+)
+
+if archivo_pdf is not None:
+
+    st.sidebar.success(
+        f"Archivo seleccionado: {archivo_pdf.name}"
+    )
+
+    if st.sidebar.button("Procesar PDF"):
+
+        try:
+
+            registros_pdf = extraer_datos_pdf(
+                archivo_pdf
+            )
+
+            if not registros_pdf:
+                st.error(
+                    "No se encontraron líneas de factura "
+                    "en el PDF."
+                )
+                st.stop()
+
+            registros_nuevos = filtrar_registros_nuevos(
+                conectar_hoja(),
+                registros_pdf
+            )
+
+            vista_previa = pd.DataFrame(
+                registros_pdf,
+                columns=COLUMNAS_GOOGLE_SHEETS
+            )
+
+            st.subheader("Vista previa del PDF")
+
+            st.write(
+                f"Registros encontrados: "
+                f"{len(registros_pdf)}"
+            )
+
+            st.dataframe(
+                vista_previa,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            if not registros_nuevos:
+
+                st.warning(
+                    "Todos los registros del PDF "
+                    "ya existen en Google Sheets."
+                )
+
+            else:
+
+                if st.button(
+                    "Confirmar carga en Google Sheets"
+                ):
+
+                    conectar_hoja().append_rows(
+                        registros_nuevos,
+                        value_input_option="USER_ENTERED"
+                    )
+
+                    st.cache_data.clear()
+
+                    st.success(
+                        f"Se agregaron "
+                        f"{len(registros_nuevos)} registros "
+                        "a Google Sheets."
+                    )
+
+                    st.info(
+                        "Pulsa 'Actualizar datos' "
+                        "para ver las nuevas facturas."
+                    )
+
+        except Exception as error:
+
+            st.error(
+                "No fue posible procesar el PDF."
+            )
+
+            st.exception(error)
+
+
+# =====================================================
+# CARGA DEL DASHBOARD
 # =====================================================
 
 try:
     df_base = cargar_y_limpiar_datos()
 
 except Exception as error:
+
     st.error(
-        "No fue posible cargar la información de Google Sheets."
+        "No fue posible cargar la información "
+        "de Google Sheets."
     )
+
     st.exception(error)
     st.stop()
 
 
-# Mensaje para hoja vacía
 if df_base.empty:
+
     st.title("Magic Print Analytics")
 
     st.info(
         "La conexión con Google Sheets funciona correctamente, "
-        "pero la pestaña Hoja1 todavía no contiene registros."
+        "pero Hoja1 todavía no contiene registros."
     )
 
     st.write(
-        "Carga los datos desde la fila 2, manteniendo los encabezados "
-        "en la fila 1."
+        "Carga un PDF desde la barra lateral. "
+        "Los encabezados deben estar en la fila 1."
     )
 
-    st.write("Cuando termines, pulsa el botón **Actualizar datos**.")
     st.stop()
 
 
@@ -333,7 +771,7 @@ fechas_validas = df_base["Fecha"].dropna()
 
 if fechas_validas.empty:
     st.error(
-        "No existen fechas válidas en la columna Fecha."
+        "No hay fechas válidas en la columna Fecha."
     )
     st.stop()
 
@@ -352,8 +790,13 @@ df_filtrado = df_base.copy()
 if isinstance(rango_fechas, tuple):
     if len(rango_fechas) == 2:
 
-        fecha_inicio = pd.to_datetime(rango_fechas[0])
-        fecha_fin = pd.to_datetime(rango_fechas[1])
+        fecha_inicio = pd.to_datetime(
+            rango_fechas[0]
+        )
+
+        fecha_fin = pd.to_datetime(
+            rango_fechas[1]
+        )
 
         df_filtrado = df_filtrado[
             (df_filtrado["Fecha"] >= fecha_inicio) &
@@ -363,7 +806,7 @@ if isinstance(rango_fechas, tuple):
 
 ciudades = st.sidebar.multiselect(
     "Ciudad",
-    sorted(df_filtrado["Ciudad"].dropna().unique())
+    sorted(df_filtrado["Ciudad"].unique())
 )
 
 if ciudades:
@@ -374,7 +817,7 @@ if ciudades:
 
 vendedores = st.sidebar.multiselect(
     "Vendedor",
-    sorted(df_filtrado["Vendedor"].dropna().unique())
+    sorted(df_filtrado["Vendedor"].unique())
 )
 
 if vendedores:
@@ -385,7 +828,7 @@ if vendedores:
 
 clientes = st.sidebar.multiselect(
     "Cliente",
-    sorted(df_filtrado["Cliente"].dropna().unique())
+    sorted(df_filtrado["Cliente"].unique())
 )
 
 if clientes:
@@ -394,9 +837,20 @@ if clientes:
     ]
 
 
+unidades = st.sidebar.multiselect(
+    "Unidad",
+    sorted(df_filtrado["Unidad"].unique())
+)
+
+if unidades:
+    df_filtrado = df_filtrado[
+        df_filtrado["Unidad"].isin(unidades)
+    ]
+
+
 tipos = st.sidebar.multiselect(
     "Tipo",
-    sorted(df_filtrado["Tipo"].dropna().unique())
+    sorted(df_filtrado["Tipo"].unique())
 )
 
 if tipos:
@@ -418,20 +872,23 @@ if df_filtrado.empty:
 
 facturas_unicas = df_filtrado["Factura #"].nunique()
 clientes_unicos = df_filtrado["Cliente"].nunique()
-cantidad_vendida = df_filtrado["Cantidad"].sum()
 
 ventas_sin_iva = df_filtrado["Valor Total"].sum()
 ventas_con_iva = df_filtrado["Ventas con IVA"].sum()
 
+cantidad_mts = df_filtrado.loc[
+    df_filtrado["Unidad"] == "MTS",
+    "Cantidad"
+].sum()
+
+cantidad_kls = df_filtrado.loc[
+    df_filtrado["Unidad"] == "KLS",
+    "Cantidad"
+].sum()
+
 ticket_promedio = (
     ventas_sin_iva / facturas_unicas
     if facturas_unicas > 0
-    else 0
-)
-
-precio_promedio_mts = (
-    ventas_sin_iva / cantidad_vendida
-    if cantidad_vendida > 0
     else 0
 )
 
@@ -456,10 +913,10 @@ def mostrar_kpi(
 
 
 # =====================================================
-# ENCABEZADO Y KPIs
+# ENCABEZADO
 # =====================================================
 
-st.title("Resumen Ejecutivo de Ventas")
+st.title("Magic Print Analytics")
 
 st.caption(
     "Fuente: Base_Datos_Ventas / Hoja1"
@@ -478,39 +935,38 @@ mostrar_kpi(
 
 mostrar_kpi(
     col2,
-    "Facturas emitidas",
+    "Facturas",
     f"{facturas_unicas:,.0f}"
 )
 
 mostrar_kpi(
     col3,
-    "Clientes atendidos",
+    "Clientes",
     f"{clientes_unicos:,.0f}"
 )
 
 mostrar_kpi(
     col4,
     "Cantidad MTS",
-    f"{cantidad_vendida:,.0f}"
+    f"{cantidad_mts:,.2f}"
 )
 
 mostrar_kpi(
     col5,
+    "Cantidad KLS",
+    f"{cantidad_kls:,.2f}"
+)
+
+mostrar_kpi(
+    col6,
     "Ticket promedio",
     f"{ticket_promedio:,.0f}",
     "$"
 )
 
-mostrar_kpi(
-    col6,
-    "Precio promedio MTS",
-    f"{precio_promedio_mts:,.0f}",
-    "$"
-)
-
 
 # =====================================================
-# TENDENCIA DE VENTAS
+# TENDENCIA
 # =====================================================
 
 st.subheader("Tendencia de ventas")
@@ -543,7 +999,7 @@ st.plotly_chart(
 
 
 # =====================================================
-# VENTAS POR CIUDAD Y VENDEDOR
+# CIUDAD Y VENDEDOR
 # =====================================================
 
 col_ciudad, col_vendedor = st.columns(2)
@@ -629,7 +1085,7 @@ with col_vendedor:
 # PRODUCTOS Y SERVICIOS
 # =====================================================
 
-col_producto, col_tipo = st.columns(2)
+col_producto, col_composicion = st.columns(2)
 
 with col_producto:
 
@@ -673,16 +1129,26 @@ with col_producto:
 
         datos_producto = (
             df_filtrado
-            .groupby("Descripcion", as_index=False)["Cantidad"]
+            .groupby(
+                ["Descripcion", "Unidad"],
+                as_index=False
+            )["Cantidad"]
             .sum()
             .sort_values("Cantidad")
             .tail(10)
         )
 
+        datos_producto["Etiqueta"] = (
+            datos_producto["Descripcion"] +
+            " (" +
+            datos_producto["Unidad"] +
+            ")"
+        )
+
         fig_producto = px.bar(
             datos_producto,
             x="Cantidad",
-            y="Descripcion",
+            y="Etiqueta",
             orientation="h",
             text_auto=".2s",
             color_discrete_sequence=[COLOR_PRINCIPAL]
@@ -728,11 +1194,11 @@ with col_producto:
     )
 
 
-with col_tipo:
+with col_composicion:
 
     st.subheader("Productos y servicios por ciudad")
 
-    datos_tipo = (
+    datos_composicion = (
         df_filtrado
         .groupby(
             ["Ciudad", "Tipo"],
@@ -741,8 +1207,8 @@ with col_tipo:
         .sum()
     )
 
-    fig_tipo = px.bar(
-        datos_tipo,
+    fig_composicion = px.bar(
+        datos_composicion,
         x="Valor Total",
         y="Ciudad",
         color="Tipo",
@@ -754,7 +1220,7 @@ with col_tipo:
         }
     )
 
-    fig_tipo.update_layout(
+    fig_composicion.update_layout(
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis_title="Ventas sin IVA",
         yaxis_title="",
@@ -762,7 +1228,7 @@ with col_tipo:
     )
 
     st.plotly_chart(
-        fig_tipo,
+        fig_composicion,
         use_container_width=True
     )
 
@@ -807,7 +1273,8 @@ with tab_clientes:
                 "Ticket promedio": "${:,.0f}"
             }
         ),
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
 
@@ -815,7 +1282,10 @@ with tab_pagos:
 
     ventas_pago = (
         df_filtrado
-        .groupby("Forma de Pago", as_index=False)["Valor Total"]
+        .groupby(
+            "Forma de Pago",
+            as_index=False
+        )["Valor Total"]
         .sum()
         .sort_values("Valor Total", ascending=False)
     )
@@ -837,7 +1307,8 @@ with tab_pagos:
                 "Participación %": "{:.1f}%"
             }
         ),
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
 
@@ -847,20 +1318,25 @@ with tab_detalle:
         "Factura #",
         "Fecha",
         "Cliente",
+        "Nit",
         "Ciudad",
         "Vendedor",
         "Codigo Articulo",
         "Descripcion",
+        "Unidad",
         "Cantidad",
+        "Precio Unitario",
         "Valor Total"
     ]
 
     st.dataframe(
         df_filtrado[columnas_mostrar].style.format(
             {
-                "Cantidad": "{:,.1f}",
+                "Cantidad": "{:,.2f}",
+                "Precio Unitario": "${:,.0f}",
                 "Valor Total": "${:,.0f}"
             }
         ),
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
