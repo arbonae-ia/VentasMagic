@@ -20,7 +20,7 @@ with col_izq:
         <div class="main-subtitle" style="margin-top:4px;">Seguimiento inteligente de ventas, facturación y análisis comercial</div>
     """, unsafe_allow_html=True)
 with col_der:
-    st.image("logo.png", width=70)
+    st.image("logo.jpg", width=70)
 
 if st.session_state["mensaje_carga"]:
     st.success(st.session_state.pop("mensaje_carga"))
