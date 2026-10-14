@@ -1,6 +1,7 @@
 streamlit
 pandas
-plotly
 numpy
+plotly
 gspread
 google-auth
+pdfplumber
