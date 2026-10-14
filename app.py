@@ -222,189 +222,180 @@ def extraer_datos_pdf(archivo_pdf):
     if not contenido:
         raise ValueError("El archivo PDF está vacío.")
 
-    texto_paginas = []
-
     with pdfplumber.open(io.BytesIO(contenido)) as pdf:
+
         for pagina in pdf.pages:
             texto = pagina.extract_text() or ""
-            texto_paginas.append(texto)
 
-    texto_completo = "\n".join(texto_paginas)
+            if not texto.strip():
+                continue
 
-    if not texto_completo.strip():
-        raise ValueError(
-            "No se pudo extraer texto del PDF. "
-            "Verifica que el archivo no sea únicamente una imagen escaneada."
-        )
+            # Normaliza los guiones especiales usados por el PDF
+            texto = (
+                texto
+                .replace("−", "-")
+                .replace("–", "-")
+                .replace("—", "-")
+            )
 
-    bloques_factura = re.split(
-        r"(?=Factura\s*(?:No|N[°º]|#)\s*:?\s*[A-Z0-9-]+)",
-        texto_completo,
-        flags=re.IGNORECASE
-    )
-
-    if len(bloques_factura) == 1:
-        bloques_factura = [texto_completo]
-
-    for bloque in bloques_factura:
-
-        factura_match = re.search(
-            r"Factura\s*(?:No|N[°º]|#)\s*:?\s*([A-Z0-9-]+)",
-            bloque,
-            flags=re.IGNORECASE
-        )
-
-        if not factura_match:
+            # Datos principales de la factura
             factura_match = re.search(
-                r"\b(FM-\d+)\b",
-                bloque,
+                r"Numero\s*:\s*([A-Z]+-\d+)",
+                texto,
                 flags=re.IGNORECASE
             )
 
-        if not factura_match:
-            continue
+            if not factura_match:
+                factura_match = re.search(
+                    r"\b(FM-\d+)\b",
+                    texto,
+                    flags=re.IGNORECASE
+                )
 
-        factura = limpiar_texto(factura_match.group(1)).upper()
+            if not factura_match:
+                continue
 
-        fecha_match = re.search(
-            r"Fecha\s*:?\s*(\d{4}[-−–][A-Z]{3}[-−–]\d{2})",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            factura = factura_match.group(1).upper()
 
-        fecha = ""
-        if fecha_match:
-            fecha = convertir_fecha_pdf(fecha_match.group(1))
+            fecha_match = re.search(
+                r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        cliente_match = re.search(
-            r"Cliente\s*:?\s*(.+?)(?=\s+(?:NIT|Nit)\s*:|$)",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            fecha = ""
 
-        cliente = ""
-        if cliente_match:
-            cliente = limpiar_texto(cliente_match.group(1))
+            if fecha_match:
+                fecha = convertir_fecha_pdf(
+                    fecha_match.group(1)
+                )
 
-        nit_match = re.search(
-            r"NIT\s*:?\s*([0-9.\-]+)",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            cliente_match = re.search(
+                r"Cliente\s*:\s*(.*?)\s*\|",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        nit = ""
-        if nit_match:
-            nit = limpiar_nit(nit_match.group(1))
+            cliente = (
+                limpiar_texto(cliente_match.group(1))
+                if cliente_match else ""
+            )
 
-        ciudad_match = re.search(
-            r"Ciudad\s*:?\s*(.+?)(?=\s+(?:Vendedor|Venta|Forma)\s*:|$)",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            nit_match = re.search(
+                r"Nit\s+o\s+C\.C\.\s*:\s*([0-9.\-]+)",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        ciudad = ""
-        if ciudad_match:
-            ciudad = limpiar_texto(ciudad_match.group(1))
+            nit = (
+                limpiar_nit(nit_match.group(1))
+                if nit_match else ""
+            )
 
-        vendedor_match = re.search(
-            r"Vendedor\s*:?\s*(.+?)(?=\s+(?:Forma de Pago|Forma Pago|Pago)\s*:|$)",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            ciudad_match = re.search(
+                r"Ciudad\s*:\s*([A-ZÁÉÍÓÚÑ ]+)",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        vendedor = ""
-        if vendedor_match:
-            vendedor = limpiar_texto(vendedor_match.group(1))
+            ciudad = (
+                limpiar_texto(ciudad_match.group(1))
+                if ciudad_match else ""
+            )
 
-        pago_match = re.search(
-            r"Forma\s+de\s+Pago\s*:?\s*(.+)",
-            bloque,
-            flags=re.IGNORECASE
-        )
+            vendedor_match = re.search(
+                r"Vendedor\s*:\s*(.*?)\s*\|",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        forma_pago = ""
-        if pago_match:
-            forma_pago = limpiar_texto(pago_match.group(1).split("\n")[0])
+            vendedor = (
+                limpiar_texto(vendedor_match.group(1))
+                if vendedor_match else ""
+            )
 
-        # Busca líneas de productos o servicios.
-        patron_linea = re.compile(
-            r"(?m)^\s*"
-            r"(\d{3,10})\s+"
-            r"(.+?)\s+"
-            r"(\d+(?:[.,]\d+)?)\s+"
-            r"(MTS|KLS|UND|UN|KG|KGM|SERV|UNIDAD)\s+"
-            r"([\d.,]+)\s+"
-            r"(?:[\d.,]+\s+)?"
-            r"([\d.,]+)"
-            r"\s*$",
-            flags=re.IGNORECASE
-        )
+            pago_match = re.search(
+                r"\|\s*(CREDITO\s+\d+\s+DIAS?|CONTADO)\s*\|",
+                texto,
+                flags=re.IGNORECASE
+            )
 
-        lineas = patron_linea.findall(bloque)
+            forma_pago = (
+                limpiar_texto(pago_match.group(1))
+                if pago_match else ""
+            )
 
-        # Segundo patrón para documentos donde no aparece la unidad.
-        if not lineas:
-            patron_linea_sin_unidad = re.compile(
-                r"(?m)^\s*"
+            # Formato real de las líneas del PDF:
+            #
+            # Código Descripción Piezas Cantidad Unidad
+            # Precio Descuento ValorTotal IVA
+            #
+            patron_linea = re.compile(
+                r"^\s*\|?\s*"
                 r"(\d{3,10})\s+"
                 r"(.+?)\s+"
                 r"(\d+(?:[.,]\d+)?)\s+"
+                r"(\d+(?:[.,]\d+)?)\s+"
+                r"(MTS|KLS|UND|UN|KG|KGM|SERV|UNIDAD)\s+"
+                r"([\d.,]+)\s+"
+                r"([\d.,]+)\s+"
                 r"([\d.,]+)\s+"
                 r"([\d.,]+)"
-                r"\s*$",
-                flags=re.IGNORECASE
+                r"\s*\*?\|?\s*$",
+                flags=re.IGNORECASE | re.MULTILINE
             )
 
-            lineas_sin_unidad = patron_linea_sin_unidad.findall(bloque)
+            lineas = patron_linea.findall(texto)
 
-            for codigo, descripcion, cantidad, precio, total in lineas_sin_unidad:
-                lineas.append(
-                    (
-                        codigo,
-                        descripcion,
-                        cantidad,
-                        "UND",
-                        precio,
-                        total
-                    )
-                )
+            for linea in lineas:
+                (
+                    codigo,
+                    descripcion,
+                    piezas,
+                    cantidad,
+                    unidad,
+                    precio_unitario,
+                    descuento,
+                    valor_total,
+                    iva
+                ) = linea
 
-        for linea in lineas:
-            codigo = limpiar_texto(linea[0])
-            descripcion = limpiar_texto(linea[1])
-            cantidad = convertir_numero(linea[2])
-            unidad = limpiar_texto(linea[3]).upper()
-            precio_unitario = convertir_numero(linea[4])
-            valor_total = convertir_numero(linea[5])
+                codigo = limpiar_texto(codigo)
+                descripcion = limpiar_texto(descripcion)
+                unidad = limpiar_texto(unidad).upper()
 
-            if not codigo or valor_total == 0:
-                continue
+                cantidad = convertir_numero(cantidad)
+                precio_unitario = convertir_numero(precio_unitario)
+                valor_total = convertir_numero(valor_total)
+                iva = convertir_numero(iva)
 
-            registros.append([
-                factura,
-                fecha,
-                cliente,
-                nit,
-                ciudad,
-                vendedor,
-                codigo,
-                descripcion,
-                unidad,
-                cantidad,
-                precio_unitario,
-                valor_total,
-                19,
-                forma_pago
-            ])
+                if not codigo or valor_total == 0:
+                    continue
+
+                registros.append([
+                    factura,
+                    fecha,
+                    cliente,
+                    nit,
+                    ciudad,
+                    vendedor,
+                    codigo,
+                    descripcion,
+                    unidad,
+                    cantidad,
+                    precio_unitario,
+                    valor_total,
+                    iva,
+                    forma_pago
+                ])
 
     if not registros:
         raise ValueError(
             "No se encontraron líneas de productos o servicios. "
-            "Revisa el formato del PDF."
+            "El formato del PDF no coincide con el extractor."
         )
 
     return registros
-
 
 # ============================================================
 # DUPLICADOS Y CARGA
