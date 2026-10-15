@@ -228,94 +228,60 @@ def extraer_datos_pdf(archivo_pdf):
             iva_match = re.search(r"Iva%|19\.00", texto)
             iva_porcentaje = 19.0 if iva_match else 0.0
 
-            tablas = pagina.extract_tables()
-            lineas_encontradas = False
+            lineas = texto.split("\n")
+            for linea in lineas:
+                linea_clean = limpiar_texto(linea)
+                if not linea_clean:
+                    continue
+                linea_upper = linea_clean.upper()
+                if any(p in linea_upper for p in palabras_invalidas):
+                    continue
 
-            if tablas:
-                for tabla in tablas:
-                    for fila in tabla:
-                        fila_limpia = [limpiar_texto(c) for c in fila if c is not None and limpiar_texto(c) != ""]
-                        if not fila_limpia:
-                            continue
-                        
-                        texto_fila = " ".join(fila_limpia).upper()
-                        if any(palabra in texto_fila for palabra in palabras_invalidas):
-                            continue
+                tokens = linea_clean.split()
+                if len(tokens) < 3:
+                    continue
 
-                        numeros = [convertir_numero(c) for c in fila_limpia if convertir_numero(c) > 0]
-                        if len(numeros) >= 1:
-                            codigo = "100000"
-                            idx_codigo = -1
-                            for idx, c in enumerate(fila_limpia):
-                                if c.isdigit() and len(c) >= 3:
-                                    codigo = c
-                                    idx_codigo = idx
-                                    break
+                unidad = "MTS"
+                for u in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
+                    if u in linea_upper:
+                        unidad = u
+                        break
 
-                            lineas_encontradas = True
-                            total_val = numeros[-1]
-                            precio_val = numeros[-2] if len(numeros) >= 2 else total_val
-                            cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
-                            if cantidad_val <= 0:
-                                cantidad_val = 1.0
+                numeros_encontrados = []
+                texto_descripcion = []
 
-                            unidad = "MTS"
-                            for c in fila_limpia:
-                                if c.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
-                                    unidad = c.upper()
-                                    break
+                for t in tokens:
+                    t_limpio = t.replace("$", "").replace("*", "").replace("|", "")
+                    if re.match(r"^\d{1,3}(,\d{3})*\.\d{2}$", t_limpio) or re.match(r"^\d+\.\d+$", t_limpio) or (t_limpio.replace(".", "").isdigit() and len(t_limpio) <= 8 and not t_limpio.startswith("10000")):
+                        val_num = convertir_numero(t_limpio)
+                        if val_num > 0:
+                            numeros_encontrados.append(val_num)
+                    else:
+                        if t_limpio.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD", "19.00", "19.0"}:
+                            texto_descripcion.append(t_limpio)
 
-                            desc_candidatos = [c for c in fila_limpia if not c.isdigit() and convertir_numero(c) == 0 and c.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
-                            descripcion = " ".join(desc_candidatos) if desc_candidatos else "ARTICULO FACTURADO"
+                if len(numeros_encontrados) >= 2:
+                    total_val = numeros_encontrados[-1]
+                    precio_val = numeros_encontrados[-2] if len(numeros_encontrados) >= 2 else total_val
+                    cantidad_val = numeros_encontrados[0] if len(numeros_encontrados) >= 3 and numeros_encontrados[0] < 10000 else 1.0
 
-                            if total_val > 0:
-                                registros.append([
-                                    factura, fecha, cliente, nit, ciudad, vendedor,
-                                    codigo, descripcion, unidad, cantidad_val,
-                                    precio_val, total_val, iva_porcentaje,
-                                    forma_pago, clasificar_tipo_venta(codigo)
-                                ])
+                    codigo = "100000"
+                    if texto_descripcion and texto_descripcion[0].isdigit() and len(texto_descripcion[0]) >= 3:
+                        codigo = texto_descripcion.pop(0)
 
-            if not lineas_encontradas:
-                lineas = texto.split("\n")
-                for linea in lineas:
-                    linea_clean = limpiar_texto(linea)
-                    if not linea_clean:
-                        continue
-                    linea_upper = linea_clean.upper()
-                    if any(palabra in linea_upper for palabra in palabras_invalidas):
-                        continue
+                    descripcion = " ".join(texto_descripcion)
+                    if not descripcion:
+                        descripcion = "ARTICULO FACTURADO"
 
-                    tokens = linea_clean.split()
-                    numeros = [convertir_numero(t) for t in tokens if convertir_numero(t) > 0]
-                    if len(numeros) >= 1 and any(u in linea_upper for u in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]):
-                        total_val = numeros[-1]
-                        precio_val = numeros[-2] if len(numeros) >= 2 else total_val
-                        cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
-                        if cantidad_val <= 0:
-                            cantidad_val = 1.0
-
-                        codigo = tokens[0] if tokens and tokens[0].isdigit() and len(tokens[0]) >= 3 else "100000"
-                        
-                        unidad = "MTS"
-                        for u_test in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
-                            if u_test in linea_upper:
-                                unidad = u_test
-                                break
-
-                        desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
-                        descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
-
-                        if total_val > 0:
-                            registros.append([
-                                factura, fecha, cliente, nit, ciudad, vendedor,
-                                codigo, descripcion, unidad, cantidad_val,
-                                precio_val, total_val, iva_porcentaje,
-                                forma_pago, clasificar_tipo_venta(codigo)
-                            ])
+                    registros.append([
+                        factura, fecha, cliente, nit, ciudad, vendedor,
+                        codigo, descripcion, unidad, cantidad_val,
+                        precio_val, total_val, iva_porcentaje,
+                        forma_pago, clasificar_tipo_venta(codigo)
+                    ])
 
     if not registros:
-        raise ValueError("No se pudieron extraer los ítems del PDF. Comprueba que el archivo tenga una estructura válida.")
+        raise ValueError("No se pudieron extraer los ítems válidos del PDF.")
     return registros
 
 def obtener_informacion_duplicados(hoja, registros_pdf):
@@ -474,307 +440,3 @@ with st.container(border=True):
                 sel_tipo_venta = seleccion
 
 # Aplicar filtros al DataFrame
-df = df_full.copy()
-if df.empty:
-    st.info("Google Sheets está conectado, pero todavía no contiene registros.")
-
-if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    df = df[(df["Fecha"].dt.date >= rango_fechas[0]) & (df["Fecha"].dt.date <= rango_fechas[1])]
-if sel_ciudades:
-    df = df[df["Ciudad"].astype(str).isin(sel_ciudades)]
-if sel_vendedores:
-    df = df[df["Vendedor"].astype(str).isin(sel_vendedores)]
-if sel_clientes:
-    df = df[df["Cliente"].astype(str).isin(sel_clientes)]
-if sel_tipo_venta:
-    df = df[df["Tipo de Venta"].astype(str).isin(sel_tipo_venta)]
-
-periodo_resumen = "Todos los periodos"
-if isinstance(rango_fechas, (tuple, list)) and len(rango_fechas) == 2:
-    periodo_resumen = f"{rango_fechas[0].strftime('%d/%m/%Y')} – {rango_fechas[1].strftime('%d/%m/%Y')}"
-ciudad_resumen = ", ".join(sel_ciudades) if sel_ciudades else "Todas"
-vendedor_resumen = ", ".join(sel_vendedores) if sel_vendedores else "Todos"
-cliente_resumen = ", ".join(sel_clientes) if sel_clientes else "Todos"
-tipo_resumen = ", ".join(sel_tipo_venta) if sel_tipo_venta else "Todos"
-st.markdown(
-    f'<div class="filter-summary"><strong>Analizando:</strong> Periodo: {periodo_resumen} &nbsp;·&nbsp; '
-    f'Ciudad: {ciudad_resumen} &nbsp;·&nbsp; Vendedor: {vendedor_resumen} &nbsp;·&nbsp; '
-    f'Cliente: {cliente_resumen} &nbsp;·&nbsp; Tipo de venta: {tipo_resumen}</div>',
-    unsafe_allow_html=True
-)
-
-# -----------------------------------------------------------------------------
-# GESTIÓN DE VISTA PREVIA Y CARGA A GOOGLE SHEETS
-# -----------------------------------------------------------------------------
-registros_pdf = st.session_state["registros_pdf"]
-if registros_pdf:
-    st.markdown('<div class="section-title">📦 Vista previa del documento</div>', unsafe_allow_html=True)
-    df_pdf = pd.DataFrame(registros_pdf, columns=COLUMNAS)
-    st.caption(f"Se encontraron {len(df_pdf)} líneas en el documento.")
-    st.dataframe(df_pdf, use_container_width=True, hide_index=True)
-
-    informacion = obtener_informacion_duplicados(hoja, registros_pdf)
-    repetidas = sorted(informacion["facturas_existentes"])
-    nuevas = sorted(informacion["facturas_nuevas"])
-
-    if repetidas:
-        st.warning(f"El documento contiene {len(repetidas)} registros ya cargados.")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Registros repetidos", len(repetidas))
-        c2.metric("Líneas a reemplazar", len(informacion["filas_a_borrar"]))
-        c3.metric("Nuevos", len(nuevas))
-        with st.expander("Ver repetidos"):
-            st.write(", ".join(repetidas))
-
-        if st.button("No cargar este archivo", key="cancelar_archivo_repetido", use_container_width=True):
-            st.session_state["registros_pdf"] = None
-            st.session_state["uploader_version"] += 1
-            st.rerun()
-
-        confirmar = st.checkbox("Confirmo que deseo reemplazar los registros repetidos.")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Cargar solo nuevos", disabled=not nuevas, use_container_width=True):
-                try:
-                    with st.spinner("Cargando nuevos..."):
-                        agregar_facturas_nuevas(hoja, registros_pdf, informacion["facturas_existentes"])
-                    st.cache_data.clear()
-                    st.session_state["registros_pdf"] = None
-                    st.session_state["mensaje_carga"] = "Registros nuevos cargados correctamente."
-                    st.rerun()
-                except Exception as error:
-                    st.error(f"Error: {error}")
-        with c2:
-            if st.button("Reemplazar repetidos", type="primary", disabled=not confirmar, use_container_width=True):
-                try:
-                    with st.spinner("Reemplazando..."):
-                        reemplazar_facturas(hoja, registros_pdf, informacion["filas_a_borrar"])
-                    st.cache_data.clear()
-                    st.session_state["registros_pdf"] = None
-                    st.session_state["mensaje_carga"] = "Registros reemplazados correctamente."
-                    st.rerun()
-                except Exception as error:
-                    st.error(f"Error: {error}")
-    else:
-        st.success("No se encontraron registros repetidos. Todos son nuevos.")
-        if st.button("Cargar en Google Sheets", type="primary", use_container_width=True):
-            try:
-                with st.spinner("Cargando..."):
-                    hoja.append_rows(registros_pdf, value_input_option="USER_ENTERED")
-                st.cache_data.clear()
-                st.session_state["registros_pdf"] = None
-                st.session_state["mensaje_carga"] = "Documento cargado correctamente."
-                st.rerun()
-            except Exception as error:
-                st.error(f"Error: {error}")
-
-if df.empty:
-    st.stop()
-
-# -----------------------------------------------------------------------------
-# CÁLCULOS DE MÉTRICAS Y KPIS
-# -----------------------------------------------------------------------------
-ventas = df["Valor Total"].sum()
-facturas = df["Factura #"].nunique()
-clientes = df["Cliente"].nunique()
-cantidad = df["Cantidad"].sum()
-ticket = ventas / facturas if facturas else 0
-unidades = df["Unidad"].fillna("").astype(str).str.upper().str.strip() if "Unidad" in df.columns else pd.Series(dtype=str)
-cantidad_metros = df.loc[unidades.isin({"MTS", "MT", "M"}), "Cantidad"].sum() if not unidades.empty else 0
-cantidad_kilos = df.loc[unidades.isin({"KLS", "KG", "KGM", "KILO", "KILOS"}), "Cantidad"].sum() if not unidades.empty else 0
-forma_pago_principal = df["Forma de Pago"].fillna("Sin dato").replace("", "Sin dato").value_counts().index[0] if "Forma de Pago" in df.columns and not df.empty else "Sin dato"
-tipo_venta_principal = df["Tipo de Venta"].fillna("Sin dato").replace("", "Sin dato").value_counts().index[0] if "Tipo de Venta" in df.columns and not df.empty else "Sin dato"
-if "Forma de Pago" in df.columns and not df.empty:
-    valores_por_forma_pago = df.assign(_forma_pago=df["Forma de Pago"].fillna("Sin dato").replace("", "Sin dato")).groupby("_forma_pago")["Valor Total"].sum().sort_values(ascending=False)
-    forma_pago_principal = valores_por_forma_pago.index[0]
-    forma_pago_porcentaje = valores_por_forma_pago.iloc[0] / ventas * 100 if ventas else 0
-else:
-    forma_pago_porcentaje = 0
-if "Tipo de Venta" in df.columns and not df.empty:
-    valores_por_tipo_venta = df.assign(_tipo_venta=df["Tipo de Venta"].fillna("Sin dato").replace("", "Sin dato")).groupby("_tipo_venta")["Valor Total"].sum().sort_values(ascending=False)
-    tipo_venta_principal = valores_por_tipo_venta.index[0]
-    tipo_venta_porcentaje = valores_por_tipo_venta.iloc[0] / ventas * 100 if ventas else 0
-else:
-    tipo_venta_porcentaje = 0
-
-ventas_dia = df.groupby("Fecha", as_index=False)["Valor Total"].sum().dropna()
-if ventas_dia.empty:
-    dia_mayor, valor_mayor, dia_menor, valor_menor = "Sin datos", 0, "Sin datos", 0
-else:
-    mayor = ventas_dia.loc[ventas_dia["Valor Total"].idxmax()]
-    menor = ventas_dia.loc[ventas_dia["Valor Total"].idxmin()]
-    dia_mayor, valor_mayor = mayor["Fecha"].strftime("%d/%m/%Y"), mayor["Valor Total"]
-    dia_menor, valor_menor = menor["Fecha"].strftime("%d/%m/%Y"), menor["Valor Total"]
-
-# -----------------------------------------------------------------------------
-# RENDERIZADO DE INDICADORES COMERCIALES
-# -----------------------------------------------------------------------------
-NAVY, VERDE, CYAN = "#1C2363", "#008257", "#00BEEA"
-PALETA = [NAVY, VERDE, CYAN, "#5b66b8", "#4fb596", "#e0457b", "#8a5fd0", "#f08a24", "#7fdcf3", "#2f6fa8"]
-total_ventas = ventas or 1
-desde, hasta = df["Fecha"].min(), df["Fecha"].max()
-periodo = f"{desde:%d/%m/%Y} – {hasta:%d/%m/%Y}" if pd.notna(desde) else "Sin fechas"
-
-
-def corto(valor):
-    return f"${fnum(valor / 1e6, 1)}M" if abs(valor) >= 1e6 else cop(valor)
-
-
-def tarjeta_kpi(titulo, valor, color, nota=""):
-    nota_html = f'<div class="small-note">{nota}</div>' if nota else ""
-    return f'<div class="kpi-card {color}"><div class="kpi-title">{titulo}</div><div class="kpi-value">{valor}</div>{nota_html}</div>'
-
-
-def tarjeta(titulo, sub="", etiqueta=""):
-    tag = f'<span class="tag">{escape(etiqueta)}</span>' if etiqueta else ""
-    st.markdown(f'<div class="hd"><h2>{escape(titulo)}</h2>{tag}</div><p class="sub">{sub}</p>', unsafe_allow_html=True)
-
-
-def filas(items, color=None):
-    if not items:
-        return '<p class="sub">Sin datos con los filtros seleccionados.</p>'
-    mayor = max(v for _, v in items) or 1
-    html = ""
-    for i, (nombre, valor) in enumerate(items):
-        c = color or PALETA[i % len(PALETA)]
-        html += (
-            f'<div class="sr"><span class="n" title="{escape(str(nombre))}">{escape(str(nombre))}</span>'
-            f'<span class="t"><i style="width:{valor / mayor * 100:.1f}%;background:{c}"></i></span>'
-            f'<span class="v">{cop(valor)} ({fnum(valor / total_ventas * 100, 1)}%)</span></div>'
-        )
-    return f'<div class="seg">{html}</div>'
-
-
-def mostrar(figura, alto=320, leyenda=False):
-    figura.update_layout(
-        height=alto, margin=dict(l=8, r=8, t=4, b=8), showlegend=leyenda, separators=",.",
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(size=12, color="#2D2D2D"), hoverlabel=dict(bgcolor=NAVY, font_color="#fff"),
-        legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center"),
-    )
-    st.plotly_chart(figura, use_container_width=True, config={"displayModeBar": False})
-
-
-def barras_h(datos, x, y, color, n=10):
-    d = datos.sort_values(x, ascending=False).head(n).iloc[::-1]
-    textos = [f"{corto(v)} - {fnum(v / total_ventas * 100, 0)}%" for v in d[x]]
-    figura = go.Figure(go.Bar(
-        x=d[x], y=d[y].astype(str).str.slice(0, 32), orientation="h", marker_color=color,
-        text=textos, textposition="outside", cliponaxis=False,
-        hovertemplate="%{y}<br>$%{x:,.0f}<extra></extra>",
-    ))
-    figura.update_xaxes(showgrid=True, gridcolor="#eef1f5", zeroline=False, tickprefix="$", tickformat="~s")
-    figura.update_yaxes(showgrid=False)
-    figura.update_layout(margin=dict(l=8, r=115, t=4, b=8))
-    mostrar(figura)
-
-
-def anillo(items, colores, alto=215):
-    total = sum(v for _, v in items)
-    figura = go.Figure(go.Pie(
-        labels=[str(n) for n, _ in items], values=[v for _, v in items], hole=0.62, sort=False,
-        marker=dict(colors=colores, line=dict(color="#ffffff", width=2)), textinfo="percent",
-        hovertemplate="%{label}<br>$%{value:,.0f} (%{percent})<extra></extra>",
-    ))
-    figura.add_annotation(text=f"<b>{corto(total)}</b>", x=0.5, y=0.5, showarrow=False, font=dict(size=15, color=NAVY))
-    mostrar(figura, alto=alto, leyenda=True)
-
-
-def serie(columna):
-    if columna not in df.columns:
-        return []
-    s = df.assign(_k=df[columna].fillna("Sin dato").replace("", "Sin dato")).groupby("_k")["Valor Total"].sum()
-    return list(s.sort_values(ascending=False).items())
-
-
-st.markdown('<div class="section-title">📊 Indicadores comerciales</div>', unsafe_allow_html=True)
-kpis = [
-    ("Ventas sin IVA", cop(ventas), "blue", periodo),
-    ("Facturas realizadas", fnum(facturas), "green", f"{fnum(len(df))} líneas de detalle"),
-    ("Clientes atendidos", fnum(clientes), "purple", f"En {fnum(df['Ciudad'].nunique())} ciudades"),
-    ("Metros vendidos", f"{fnum(cantidad_metros, 2)} m", "orange", "Según unidad facturada"),
-    ("Kilos vendidos", f"{fnum(cantidad_kilos, 2)} kg", "cyan", "Según unidad facturada"),
-    ("Ticket promedio", cop(ticket), "blue", "Valor promedio por factura"),
-]
-for col, (titulo, valor, color, nota) in zip(st.columns(6, gap="small"), kpis):
-    col.markdown(tarjeta_kpi(titulo, valor, color, nota), unsafe_allow_html=True)
-
-st.markdown('<div class="kpi-row-gap"></div>', unsafe_allow_html=True)
-extras = [
-    ("Forma de pago dominante", forma_pago_principal, "cyan", f"{fnum(forma_pago_porcentaje, 1)}% del valor vendido"),
-    ("Tipo de venta dominante", tipo_venta_principal, "purple", f"{fnum(tipo_venta_porcentaje, 1)}% del valor vendido"),
-    ("Día de mayor venta", dia_mayor, "green", f"{cop(valor_mayor)} vendidos"),
-    ("Día de menor venta", dia_menor, "orange", f"{cop(valor_menor)} vendidos"),
-]
-for col, (titulo, valor, color, nota) in zip(st.columns(4, gap="small"), extras):
-    col.markdown(tarjeta_kpi(titulo, valor, color, nota), unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# BLOQUE DE GRÁFICOS Y ANÁLISIS COMERCIAL
-# -----------------------------------------------------------------------------
-st.markdown('<div class="section-title">📈 Análisis comercial detallado</div>', unsafe_allow_html=True)
-
-c1, c2 = st.columns([2, 1])
-with c1:
-    with st.container(border=True):
-        tarjeta("Ventas y facturas por día", "Facturas emitidas (barras) y valor vendido (línea)")
-        d = (df.groupby("Fecha", as_index=False)
-               .agg(ventas=("Valor Total", "sum"), facturas=("Factura #", "nunique"))
-               .dropna(subset=["Fecha"]).sort_values("Fecha"))
-        dias = d["Fecha"].dt.strftime("%d/%m")
-        figura = go.Figure()
-        figura.add_bar(x=dias, y=d["facturas"], name="Facturas", marker_color=CYAN,
-                       hovertemplate="%{x}<br>%{y} facturas<extra></extra>")
-        figura.add_scatter(x=dias, y=d["ventas"], name="Ventas ($)", mode="lines+markers", yaxis="y2",
-                           line=dict(color=VERDE, width=3), marker=dict(size=7),
-                           hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>")
-        figura.update_layout(
-            xaxis=dict(type="category", showgrid=False),
-            yaxis=dict(title="Facturas", rangemode="tozero", gridcolor="#eef1f5", tickformat="d"),
-            yaxis2=dict(title="Ventas ($)", overlaying="y", side="right", rangemode="tozero",
-                        showgrid=False, tickprefix="$", tickformat="~s"),
-        )
-        mostrar(figura, alto=480, leyenda=True)
-with c2:
-    with st.container(border=True):
-        tarjeta("Tipo de venta y forma de pago", "Participación sobre el valor vendido")
-        st.markdown('<p class="sub2">Tipo de venta</p>', unsafe_allow_html=True)
-        items = serie("Tipo de Venta")
-        if items:
-            anillo(items, [VERDE, CYAN, "#5b66b8", "#4fb596"])
-        st.markdown('<p class="sub2">Forma de pago</p>', unsafe_allow_html=True)
-        items = serie("Forma de Pago")
-        if items:
-            anillo(items, [NAVY, "#5b66b8", CYAN, "#8a5fd0", "#f08a24"])
-
-c1, c2 = st.columns(2)
-with c1:
-    with st.container(border=True):
-        tarjeta("Top 10 ciudades por ventas", "Valor vendido y participación sobre el total")
-        barras_h(df.groupby("Ciudad", as_index=False)["Valor Total"].sum(), "Valor Total", "Ciudad", VERDE)
-with c2:
-    with st.container(border=True):
-        tarjeta("Top 10 artículos más vendidos", "Valor vendido y participación sobre el total")
-        barras_h(df.groupby("Descripcion", as_index=False)["Valor Total"].sum(), "Valor Total", "Descripcion", "#5b66b8")
-
-c1, c2 = st.columns(2)
-with c1:
-    with st.container(border=True):
-        top_clientes = serie("Cliente")[:7]
-        tarjeta("Ranking de facturación por cliente", "Top 7 clientes por valor vendido", f"{fnum(clientes)} clientes · {corto(ventas)}")
-        st.markdown(filas(top_clientes), unsafe_allow_html=True)
-with c2:
-    with st.container(border=True):
-        vendedores = serie("Vendedor")[:10]
-        tarjeta("Desempeño por vendedor", "Valor vendido y participación", f"{len(vendedores)} vendedores")
-        st.markdown(filas(vendedores), unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# TABLA DE DETALLE
-# -----------------------------------------------------------------------------
-st.markdown('<div class="section-title">📋 Detalle de facturación</div>', unsafe_allow_html=True)
-with st.container(border=True):
-    st.dataframe(
-        df, use_container_width=True, hide_index=True,
-        column_config={"Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")},
-    )
