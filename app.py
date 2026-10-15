@@ -646,7 +646,7 @@ def serie(columna):
 st.markdown('<div class="section-title">📊 Indicadores comerciales</div>', unsafe_allow_html=True)
 kpis = [
     ("Ventas sin IVA", cop(ventas), "blue", periodo),
-    ("Facturas realizadas", fnum(facturas), "green", f"{fnum(len(df))} líneas de detalle"),
+    ("Facturas realizadas", fnum(facturas), "green"),
     ("Clientes atendidos", fnum(clientes), "purple", f"En {fnum(df['Ciudad'].nunique())} ciudades"),
     ("Metros vendidos", f"{fnum(cantidad_metros, 2)} m", "orange", "Según unidad facturada"),
     ("Kilos vendidos", f"{fnum(cantidad_kilos, 2)} kg", "cyan", "Según unidad facturada"),
