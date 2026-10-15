@@ -221,40 +221,45 @@ def extraer_datos_pdf(archivo_pdf):
             iva_match = re.search(r"Iva%|19\.00", texto)
             iva_porcentaje = 19.0 if iva_match else 0.0
 
-            lineas_texto = texto.split("\n")
-            for linea in lineas_texto:
-                linea_clean = limpiar_texto(linea)
-                if not linea_clean:
-                    continue
-                
-                linea_upper = linea_clean.upper()
-                if any(palabra in linea_upper for palabra in ["FORMA DE PAGO", "FECHA DE VENCIMIENTO", "ESTABLECIM", "DIRECCION", "TELEFONO", "RESOLUCION", "FAVOR", "ANEXO"]):
-                    continue
+            tablas = pagina.extract_tables()
+            encontro_en_tabla = False
 
-                tokens = linea_clean.split()
-                if len(tokens) >= 2:
-                    ultimo_str = tokens[-1].replace("$", "").replace(".", "").replace(",", "")
-                    if ultimo_str.isdigit():
-                        total_val = convertir_numero(tokens[-1])
-                        if total_val > 50:
-                            codigo = tokens[0] if tokens[0].isdigit() and len(tokens[0]) >= 3 else "100000"
-                            precio_val = convertir_numero(tokens[-2]) if len(tokens) >= 3 else total_val
-                            cantidad_val = 1.0
-                            
-                            for t in tokens[1:-1]:
-                                num_test = convertir_numero(t)
-                                if 0 < num_test < 10000 and not t.isdigit() and len(t) <= 6:
-                                    cantidad_val = num_test
+            if tablas:
+                for tabla in tablas:
+                    for fila in tabla:
+                        fila_limpia = [limpiar_texto(c) for c in fila if c is not None and limpiar_texto(c) != ""]
+                        if not fila_limpia:
+                            continue
+                        
+                        texto_fila = " ".join(fila_limpia).upper()
+                        if any(h in texto_fila for h in ["CODIGO", "DESCRIPCION", "CANTIDAD", "VALOR", "PRECIO", "FORMA DE PAGO", "TOTAL"]):
+                            continue
+
+                        numeros = [convertir_numero(c) for c in fila_limpia if convertir_numero(c) > 0]
+                        if len(numeros) >= 1:
+                            codigo = "100000"
+                            idx_codigo = -1
+                            for idx, c in enumerate(fila_limpia):
+                                if c.isdigit() and len(c) >= 3:
+                                    codigo = c
+                                    idx_codigo = idx
                                     break
+
+                            encontro_en_tabla = True
+                            total_val = numeros[-1]
+                            precio_val = numeros[-2] if len(numeros) >= 2 else total_val
+                            cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
+                            if cantidad_val <= 0:
+                                cantidad_val = 1.0
 
                             unidad = "MTS"
-                            for u_test in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
-                                if u_test in linea_upper:
-                                    unidad = u_test
+                            for c in fila_limpia:
+                                if c.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
+                                    unidad = c.upper()
                                     break
 
-                            desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
-                            descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
+                            desc_candidatos = [c for c in fila_limpia if not c.isdigit() and convertir_numero(c) == 0 and c.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
+                            descripcion = " ".join(desc_candidatos) if desc_candidatos else "ARTICULO FACTURADO"
 
                             registros.append([
                                 factura, fecha, cliente, nit, ciudad, vendedor,
@@ -263,11 +268,45 @@ def extraer_datos_pdf(archivo_pdf):
                                 forma_pago, clasificar_tipo_venta(codigo)
                             ])
 
+            if not encontro_en_tabla:
+                lineas = texto.split("\n")
+                for linea in lineas:
+                    linea_clean = limpiar_texto(linea)
+                    if not linea_clean:
+                        continue
+                    linea_upper = linea_clean.upper()
+                    if any(h in linea_upper for h in ["FORMA DE PAGO", "FECHA DE VENCIMIENTO", "CLIENTE", "NIT", "DIRECCION", "VENDEDOR", "SUBTOTAL"]):
+                        continue
+
+                    tokens = linea_clean.split()
+                    numeros = [convertir_numero(t) for t in tokens if convertir_numero(t) > 0]
+                    if len(numeros) >= 1:
+                        total_val = numeros[-1]
+                        precio_val = numeros[-2] if len(numeros) >= 2 else total_val
+                        cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
+                        if cantidad_val <= 0:
+                            cantidad_val = 1.0
+
+                        codigo = tokens[0] if tokens and tokens[0].isdigit() and len(tokens[0]) >= 3 else "100000"
+                        
+                        unidad = "MTS"
+                        for u_test in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
+                            if u_test in linea_upper:
+                                unidad = u_test
+                                break
+
+                        desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
+                        descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
+
+                        registros.append([
+                            factura, fecha, cliente, nit, ciudad, vendedor,
+                            codigo, descripcion, unidad, cantidad_val,
+                            precio_val, total_val, iva_porcentaje,
+                            forma_pago, clasificar_tipo_venta(codigo)
+                        ])
+
     if not registros:
-        registros.append([
-            "FM-14102026", datetime.now().strftime("%Y-%m-%d"), "CLIENTE GENERAL", "0", "CALI", "GENERAL",
-            "100000", "DOCUMENTO CONSOLIDADO PDF", "MTS", 1.0, 0.0, 0.0, 19.0, "CONTADO", "Bases Textiles"
-        ])
+        raise ValueError("No se pudieron extraer los ítems del PDF. Comprueba que el archivo tenga una estructura válida.")
     return registros
 
 def obtener_informacion_duplicados(hoja, registros_pdf):
