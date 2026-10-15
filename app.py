@@ -187,6 +187,13 @@ def extraer_datos_pdf(archivo_pdf):
     if not contenido:
         raise ValueError("El archivo PDF está vacío.")
 
+    palabras_invalidas = [
+        "FACTURA", "NUMERO", "ESTABLECIM", "TELEFONO", "FAX", "DIRECCION", 
+        "VENDEDOR", "CLIENTE", "NIT", "FORMA DE PAGO", "FECHA", "RESOLUCION", 
+        "PESOS", "TOTAL", "SUBTOTAL", "ANEXO", "PLACA", "CIUDAD", "ORDEN", 
+        "PAGINA", "REGIMEN", "CONTRIBUYENTE", "AUTORRETENEDOR"
+    ]
+
     with pdfplumber.open(io.BytesIO(contenido)) as pdf:
         for pagina_num, pagina in enumerate(pdf.pages, start=1):
             texto = (pagina.extract_text() or "").replace("−", "-").replace("–", "-")
@@ -222,7 +229,7 @@ def extraer_datos_pdf(archivo_pdf):
             iva_porcentaje = 19.0 if iva_match else 0.0
 
             tablas = pagina.extract_tables()
-            encontro_en_tabla = False
+            lineas_encontradas = False
 
             if tablas:
                 for tabla in tablas:
@@ -232,7 +239,7 @@ def extraer_datos_pdf(archivo_pdf):
                             continue
                         
                         texto_fila = " ".join(fila_limpia).upper()
-                        if any(h in texto_fila for h in ["CODIGO", "DESCRIPCION", "CANTIDAD", "VALOR", "PRECIO", "FORMA DE PAGO", "TOTAL"]):
+                        if any(palabra in texto_fila for palabra in palabras_invalidas):
                             continue
 
                         numeros = [convertir_numero(c) for c in fila_limpia if convertir_numero(c) > 0]
@@ -245,7 +252,7 @@ def extraer_datos_pdf(archivo_pdf):
                                     idx_codigo = idx
                                     break
 
-                            encontro_en_tabla = True
+                            lineas_encontradas = True
                             total_val = numeros[-1]
                             precio_val = numeros[-2] if len(numeros) >= 2 else total_val
                             cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
@@ -261,26 +268,27 @@ def extraer_datos_pdf(archivo_pdf):
                             desc_candidatos = [c for c in fila_limpia if not c.isdigit() and convertir_numero(c) == 0 and c.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
                             descripcion = " ".join(desc_candidatos) if desc_candidatos else "ARTICULO FACTURADO"
 
-                            registros.append([
-                                factura, fecha, cliente, nit, ciudad, vendedor,
-                                codigo, descripcion, unidad, cantidad_val,
-                                precio_val, total_val, iva_porcentaje,
-                                forma_pago, clasificar_tipo_venta(codigo)
-                            ])
+                            if total_val > 0:
+                                registros.append([
+                                    factura, fecha, cliente, nit, ciudad, vendedor,
+                                    codigo, descripcion, unidad, cantidad_val,
+                                    precio_val, total_val, iva_porcentaje,
+                                    forma_pago, clasificar_tipo_venta(codigo)
+                                ])
 
-            if not encontro_en_tabla:
+            if not lineas_encontradas:
                 lineas = texto.split("\n")
                 for linea in lineas:
                     linea_clean = limpiar_texto(linea)
                     if not linea_clean:
                         continue
                     linea_upper = linea_clean.upper()
-                    if any(h in linea_upper for h in ["FORMA DE PAGO", "FECHA DE VENCIMIENTO", "CLIENTE", "NIT", "DIRECCION", "VENDEDOR", "SUBTOTAL"]):
+                    if any(palabra in linea_upper for palabra in palabras_invalidas):
                         continue
 
                     tokens = linea_clean.split()
                     numeros = [convertir_numero(t) for t in tokens if convertir_numero(t) > 0]
-                    if len(numeros) >= 1:
+                    if len(numeros) >= 1 and any(u in linea_upper for u in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]):
                         total_val = numeros[-1]
                         precio_val = numeros[-2] if len(numeros) >= 2 else total_val
                         cantidad_val = numeros[-3] if len(numeros) >= 3 else 1.0
@@ -298,12 +306,13 @@ def extraer_datos_pdf(archivo_pdf):
                         desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
                         descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
 
-                        registros.append([
-                            factura, fecha, cliente, nit, ciudad, vendedor,
-                            codigo, descripcion, unidad, cantidad_val,
-                            precio_val, total_val, iva_porcentaje,
-                            forma_pago, clasificar_tipo_venta(codigo)
-                        ])
+                        if total_val > 0:
+                            registros.append([
+                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                codigo, descripcion, unidad, cantidad_val,
+                                precio_val, total_val, iva_porcentaje,
+                                forma_pago, clasificar_tipo_venta(codigo)
+                            ])
 
     if not registros:
         raise ValueError("No se pudieron extraer los ítems del PDF. Comprueba que el archivo tenga una estructura válida.")
