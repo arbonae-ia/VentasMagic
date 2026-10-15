@@ -18,7 +18,7 @@ from PIL import Image
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
 # -----------------------------------------------------------------------------
-LOGO_RESPALDO = "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"
+LOGO_RESPALDO = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCACwALADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDxdiNpqI9KlYfKahbpX26dz+jauxG3SonqVulRPVo4qhC9RmpHqM1aOKoRSVC1TScc1C1XE5p7ELdTUT1K3U1E9WjhmQvUL1M9QvVI4qmxC1RPURqiorWKCVqkepn6CoWqkcVQh1qCSon6VK3SqNx2qiD3NvuGoT0qZuuKgevn0j+haiBuqonqVuoqJ+taAcVSF6jNSPUZq0cVQiEqaiK1K1QvVpjiqEJUb1K9RPVR45kJSoT0qVuoqJ+tXE5KiIWFRP0qVupqJ+lUccyFupqJ+lSt1qF+laocFTIWFRP0qVuoqJ+tUcVSBuqNulSt1qNulaiOCmQt0qFqmbpUT9KtHIUIeKY1T0wqM1onY5qkWZreCeMwzQxujdVdQwP4GoP7J0n/AKBtr/35X/CrT1Ez1qx8VPH3iL4f3WjSaDY6dPFqEs6XBu0clAiIQAVccZY0ua0W0Jq6sc9/ZOk/wDQNtf+/K/4Uf2VpH/QNtf+/K/4V6H4p+IuuaL8RfCHhvT7LTrq08QCzM80kbiRPOnMbgEOBwBn61t3XxK1z/hf9r8P7CyzYXFk8lxMLd2aKZYy4O/dhVO0A8ZzWfPK3NbpcerdvI8p/srSP+gba/8Aflf8KP7K0j/oG2v/AH5X/CvUPib8SPEvg3x7oOjaDZ6bPb6nEkkr3SOXUmTaQm1hgEd67vX/AIu+IfCXxH0nwxquh6dc22rPEltdw70O3fscsCxyygjIB704yclypby0XmdU6TjGUn0Vzwn+ytI/6Btr/AN+V/wAKP7K0j/oG2v8A35X/AAr07XPib4gsPixp3gmw03S7iG8uIYWvXicMpkbaSuHwSPpXX+NvjB4m8I+JbPQdO0jSruS5dIftF1K8cY3sFUEq4IyeOtdHtFa/kcbqU403PZaHzl/ZOk/8Dtr/AN+VpDplgoJ+wW3H/TKvSvip8Qr74eatpemWOlWN3dXkElzLJc7j8qsoCgKR3brWj4h+I2veG/hdoviy/wBP0+S71VwsNuqP5SIM8uN2T09Rya4a9ZVZRhTjdp2b8h1aEqUHUqO0VufM39qWef+PSDx/zyphvrXP8Ax6Q//IVbXw0+JWqePvF+r6Pe6ZptuNMgMqNbCQM5DhcHLn1rpfjX8StW8BatoNrpGn6ZcR6krNKbpHYrgqPlw4x1rphjIyrvDuPvJX/p3OKlS9pQddP3V/wADb8jzL7dZnP8Ax6Qdf+mVAvoT/wAukH/fC17z4p+K/ifQ/AHhrxHZ6bptxc6vMJbiKWNwkQ25wGDc8+tY2v/FTxLpXwjsfG1ppmmvd3c4je1dJPKTOeVO4E9PWiGJUqbpqHvJ2fyJhh5upGk5LlbtdvNdjyD7fbZ/49IOP+mVAvrf8/wDp0H/fKvevjj4m1jw58QfCNpoGq3Wm3l4k7SSW0pQuFdNgOOo5PSuR1z4p+N9P+LOm+G7fxHfJpdzcRRyRNIWJUvhyXPIwOetY0686keaEd20vVJnVWwvsKjhVl8Kau+6uvI4r+3Lf/AJ9IOP8AzlqrNqdtJGR9jg/77evYvF3xR8WaB8ebLwnpuoJDpE1zZRSW4hQs4l2bzuxuB5PQ1k6x8UPG1n8ftL8M2utSrpE13aJJalEIKSbd4ztzzycZrSFaTjGSh8Tv8jxMtxNPE06s5VHJU24va97Xtb01vY8vTU7ZTzYw/jI1KmpW7dfstuc+sn/167b4r/FHxL4N+IV5omhX1vaafbRRlEaCNyWYAsWZlJ6njmkaVqkG4xvbu2XUo04VPY1avvcvNtrb1a2+5HD3GoW5hcfYrccf32/wAa52fWbNWOLKAgnP3m/wAa9R1n4o+LtQ+GuneIri9tTpr3jRLGIIw7YXO7zCu4Y6AAjHrXK/FXxdrPi/X9PuddvRcSW1skceI0TCk852gf57Vph5SqSk+XWK2uTg8PRwsJ16tdPlcldO2qVtve6+hzcmoWxf/jygH4t/jTTqdsc/wCgQD/vtv8AGhvvCoX6V6sYxUUuXsfJzqVpTk/avVvW3e3kO/tW1P8AzD4P++m/xqN9St3kG7TrY445Zv8Aaf7tNPrTG6VUYw0sjnqVKs5XdaX3iPUbcZ/4l1sc8fef/GqP7StwMHSrU/V3/wAatScabpp1L+0jTlHl5j0J+Xw1O77tfmc0uqWvy5021OemA//AMVUzapbnZ/xLLfn2f8Axrqda0PTdY02ezvbeJopQRv2jI+h7GuC+Lni3WfB/g1NS0SeOG5a5SLdJEkgIIPQFSOw7Vxc/tlyr9T2sVgnluWyzTE1JKmlzW5uW65rWTTV3eyXnsbdvqtvJHn+zrb6fN/jTH1a2QnOm2//fTf415V8P8A4meI9b+IthY65qkbaddM0TxC1iiRTtJQ71UMOQBkk9a9S+KniDUPCvw91LWtMlSK8tpIfLd0DAM8qoflPB4Y1vONSpVVKMvspv0bPPw+XZdl+U4nMq+IlKlOdSFFp+97SMU1F6fDzNa3vbWxyvxM+Mvhv4Y6dBNqsM1xeXbFLaytsCSTaMscsQAB6k9+lc18Pfjt4N+Iusf2Tpy6hp9+4zbwX8aq02ACdrKzDI5PJ5xXxd4m8U6x4v1q51jW72W8vrl98krnOB2VR0CgDgDAFZ2kanfaPrFhqWnzNDe2k8c0EinsGByM9iDgjoc08Vha9bFT5Z+7ZJdNPv1Pvsh8JuDstwWFxX1d1q0oqcqk/eSlb3ko25eVXtqrvq+rX7B0VmfDzxXD4w8FaT4gt4vJS+tkkMe4NtbGHXI4OGDDPvWvXysoOLafQ/JsbhaeExNTD1fdlGTTXZp2YUUUVPOjl+s0ue3N0vdX6fMKKKKg6gooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z"
 
 
 def _logo_b64():
@@ -193,149 +193,136 @@ def extraer_datos_pdf(archivo_pdf):
             if not texto.strip():
                 continue
 
-            # Detectar si es un Traslado (TR) o una Factura de Venta (FM)
             es_traslado = "TR" in texto.upper() or "TRANSFERENCIA" in texto.upper()
 
-            if es_traslado:
-                doc_match = re.search(r"Numero\s*:\s*([0-9\-TR]+)", texto, re.I)
-                doc_match = doc_match or re.search(r"\b(\d{3}-TR-\d+)\b", texto, re.I)
-                if not doc_match:
-                    continue
-                factura = doc_match.group(1).upper()
+            doc_match = re.search(r"Numero\s*:\s*(?:[A-Za-z]+\s*:\s*)?([A-Z0-9\-]+)", texto, re.I)
+            factura = doc_match.group(1).upper() if doc_match else "FM-00000"
 
-                fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
-                fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
+            fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
+            fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
 
-                cliente = "Bellatela SAS"
-                nit = "800138082"
-                ciudad_match = re.search(r"Local\.\s*Destino\s*:\s*[0-9\-]+\s*(.*?)(?:\n|$)", texto, re.I)
-                ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else "INTERNO"
-                vendedor = "WAGNER GIRALDO PAOLA ANDREA"
-                forma_pago = "Contado"
+            cliente_match = re.search(r"Cliente\s*[:]?\s*(.*?)(?:\n|Establecim|Nit|Direccion|$)", texto, re.I)
+            cliente = limpiar_texto(cliente_match.group(1)) if cliente_match else ("Bellatela SAS" if es_traslado else "CLIENTE GENERAL")
 
-                patron_filas_tr = re.findall(
-                    r"(\d{10,15})\s+([A-ZÁÉÍÓÚÑ0-9\-\s]+?)\s+(\d{10,15})\s*\|\s*([\d.,]+)\s*([A-Z]{2,4})\s+([\d.,]+)\s+S\s*([\d.,]+)\s*\|\s*([\d.,]+)",
-                    texto
-                )
-                if not patron_filas_tr:
-                    patron_filas_tr = re.findall(
-                        r"(\d{10,15})\s+([A-ZÁÉÍÓÚÑ0-9\-\s]+?)\s+([\d.,]+)\s+(?:MTS|UND|KG)\s+([\d.,]+)\s+([\d.,]+)",
-                        texto
-                    )
+            nit_match = re.search(r"(?:Nit\s+o\s+C\.C\.|Nit)\s*[:]?\s*([0-9.\-]+)", texto, re.I)
+            nit = limpiar_nit(nit_match.group(1)) if nit_match else ("800138082" if es_traslado else "0")
 
-                for row in patron_filas_tr:
-                    if len(row) >= 8:
-                        codigo, descripcion, _, _, unidad, cantidad, _, total = row[:8]
-                    elif len(row) >= 5:
-                        codigo, descripcion, cantidad, _, total = row[:5]
-                        unidad = "MTS"
-                    else:
+            ciudad_match = re.search(r"(?:Ciudad|Local\.\s*Destino)\s*[:]?\s*([A-ZÁÉÍÓÚÑ ]+)", texto, re.I)
+            ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else ("INTERNO" if es_traslado else "CALI")
+
+            vendedor_match = re.search(r"Vendedor\s*[:]?\s*(?:[0-9]+\s+)?(.*?)(?:\n|OC\.Nro|$)", texto, re.I)
+            vendedor = limpiar_texto(vendedor_match.group(1)) if vendedor_match else ("WAGNER GIRALDO PAOLA ANDREA" if es_traslado else "")
+
+            pago_match = re.search(r"(CREDITO\s+\d+\s+DIAS?|CONTADO)", texto, re.I)
+            forma_pago = limpiar_texto(pago_match.group(1)) if pago_match else "CONTADO"
+
+            iva_match = re.search(r"Iva%|19\.00", texto)
+            iva_porcentaje = 19.0 if iva_match else 0.0
+
+            tablas = pagina.extract_tables()
+            lineas_extraidas_pagina = False
+
+            for tabla in tablas:
+                for fila in tabla:
+                    fila_limpia = [limpiar_texto(celda) for celda in fila if celda is not None]
+                    if not fila_limpia:
                         continue
+                    
+                    codigo_encontrado = None
+                    idx_codigo = -1
+                    for idx, celda in enumerate(fila_limpia):
+                        if celda.isdigit() and 5 <= len(celda) <= 10:
+                            codigo_encontrado = celda
+                            idx_codigo = idx
+                            break
+                    
+                    if codigo_encontrado:
+                        try:
+                            numeros_fila = [convertir_numero(c) for c in fila_limpia if convertir_numero(c) > 0]
+                            if len(numeros_fila) >= 2:
+                                total_val = numeros_fila[-1]
+                                precio_val = numeros_fila[-2] if len(numeros_fila) >= 3 else total_val
+                                cantidad_val = numeros_fila[-3] if len(numeros_fila) >= 4 else 1.0
 
-                    descripcion = limpiar_texto(descripcion)
-                    cantidad_val = convertir_numero(cantidad)
-                    total_val = convertir_numero(total)
-                    if cantidad_val == 0 or total_val == 0:
-                        continue
+                                unidad = "MTS"
+                                for c in fila_limpia:
+                                    if c.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
+                                        unidad = c.upper()
+                                        break
 
-                    es_crudo = "CRUDO" in descripcion.upper()
-                    if es_crudo:
-                        registros.append([
-                            factura, fecha, cliente, nit, ciudad, vendedor,
-                            limpiar_texto(codigo), f"Base: {descripcion}", limpiar_texto(unidad).upper(),
-                            cantidad_val, total_val / cantidad_val, total_val, 0.0,
-                            forma_pago, "Bases Textiles"
-                        ])
-                    else:
-                        valor_sublimacion = 5000.0 * cantidad_val
-                        valor_base_restante = max(0.0, total_val - valor_sublimacion)
-                        registros.append([
-                            factura, fecha, cliente, nit, ciudad, vendedor,
-                            limpiar_texto(codigo), f"Sublimación: {descripcion}", limpiar_texto(unidad).upper(),
-                            cantidad_val, 5000.0, valor_sublimacion, 0.0,
-                            forma_pago, "Servicio"
-                        ])
-                        precio_base = valor_base_restante / cantidad_val if cantidad_val > 0 else 0.0
-                        registros.append([
-                            factura, fecha, cliente, nit, ciudad, vendedor,
-                            limpiar_texto(codigo), f"Base: {descripcion}", limpiar_texto(unidad).upper(),
-                            cantidad_val, precio_base, valor_base_restante, 0.0,
-                            forma_pago, "Bases Textiles"
-                        ])
-            else:
-                # -------------------------------------------------------------
-                # EXTRACCIÓN ULTRA FLEXIBLE PARA FACTURAS DE VENTA (FM)
-                # -------------------------------------------------------------
-                factura_match = re.search(r"Numero\s*:\s*(?:[A-Za-z]+\s*:\s*)?([A-Z]+-\d+)", texto, re.I)
-                factura_match = factura_match or re.search(r"\b(FM-\d+)\b", texto, re.I)
-                if not factura_match:
-                    continue
-                factura = factura_match.group(1).upper()
+                                desc_candidatos = [c for c in fila_limpia[idx_codigo+1:] if not c.isdigit() and c.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
+                                descripcion = " ".join(desc_candidatos) if desc_candidatos else "ARTICULO FACTURADO"
 
-                fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
-                fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
+                                if total_val > 0:
+                                    lineas_extraidas_pagina = True
+                                    if es_traslado:
+                                        es_crudo = "CRUDO" in descripcion.upper()
+                                        if es_crudo:
+                                            registros.append([
+                                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                                codigo_encontrado, f"Base: {descripcion}", unidad,
+                                                cantidad_val, total_val / cantidad_val if cantidad_val > 0 else total_val, total_val, 0.0,
+                                                forma_pago, "Bases Textiles"
+                                            ])
+                                        else:
+                                            valor_sublimacion = 5000.0 * cantidad_val
+                                            valor_base_restante = max(0.0, total_val - valor_sublimacion)
+                                            registros.append([
+                                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                                codigo_encontrado, f"Sublimación: {descripcion}", unidad,
+                                                cantidad_val, 5000.0, valor_sublimacion, 0.0,
+                                                forma_pago, "Servicio"
+                                            ])
+                                            precio_base = valor_base_restante / cantidad_val if cantidad_val > 0 else 0.0
+                                            registros.append([
+                                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                                codigo_encontrado, f"Base: {descripcion}", unidad,
+                                                cantidad_val, precio_base, valor_base_restante, 0.0,
+                                                forma_pago, "Bases Textiles"
+                                            ])
+                                    else:
+                                        registros.append([
+                                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                                codigo_encontrado, descripcion, unidad,
+                                                cantidad_val, precio_val, total_val, iva_porcentaje,
+                                                forma_pago, clasificar_tipo_venta(codigo_encontrado)
+                                        ])
+                        except Exception:
+                            continue
 
-                cliente_match = re.search(r"Cliente\s*[:]?\s*(.*?)(?:\n|Establecim|Nit|Direccion|$)", texto, re.I)
-                cliente = limpiar_texto(cliente_match.group(1)) if cliente_match else "CLIENTE GENERAL"
-
-                nit_match = re.search(r"(?:Nit\s+o\s+C\.C\.|Nit)\s*[:]?\s*([0-9.\-]+)", texto, re.I)
-                nit = limpiar_nit(nit_match.group(1)) if nit_match else "0"
-
-                ciudad_match = re.search(r"Ciudad\s*[:]?\s*([A-ZÁÉÍÓÚÑ ]+)", texto, re.I)
-                ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else "CALI"
-
-                vendedor_match = re.search(r"Vendedor\s*[:]?\s*(?:[0-9]+\s+)?(.*?)(?:\n|OC\.Nro|$)", texto, re.I)
-                vendedor = limpiar_texto(vendedor_match.group(1)) if vendedor_match else ""
-
-                pago_match = re.search(r"(CREDITO\s+\d+\s+DIAS?|CONTADO)", texto, re.I)
-                forma_pago = limpiar_texto(pago_match.group(1)) if pago_match else "CONTADO"
-
-                iva_match = re.search(r"Iva%|19\.00", texto)
-                iva_porcentaje = 19.0 if iva_match else 0.0
-
+            if not lineas_extraidas_pagina:
                 lineas_texto = texto.split("\n")
                 for linea in lineas_texto:
                     if any(um in linea.upper() for um in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]):
-                        partes_tokens = linea.strip().split()
-                        if len(partes_tokens) >= 5:
-                            codigo_candidato = partes_tokens[0]
-                            if codigo_candidato.isdigit() and len(codigo_candidato) >= 5:
-                                codigo = codigo_candidato
-                                try:
-                                    total_val = convertir_numero(partes_tokens[-1])
-                                    precio_val = convertir_numero(partes_tokens[-3])
-                                    cantidad_val = convertir_numero(partes_tokens[-5]) if len(partes_tokens) >= 6 else convertir_numero(partes_tokens[-4])
-                                    
-                                    unidad = "MTS"
-                                    for t in partes_tokens:
-                                        if t.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
-                                            unidad = t.upper()
-                                            break
+                        tokens = linea.strip().split()
+                        if tokens and tokens[0].isdigit() and len(tokens[0]) >= 5:
+                            try:
+                                codigo = tokens[0]
+                                total_val = convertir_numero(tokens[-1])
+                                precio_val = convertir_numero(tokens[-3]) if len(tokens) >= 4 else total_val
+                                cantidad_val = convertir_numero(tokens[-5]) if len(tokens) >= 6 else 1.0
+                                
+                                unidad = "MTS"
+                                for t in tokens:
+                                    if t.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
+                                        unidad = t.upper()
+                                        break
+                                
+                                desc_tokens = [t for t in tokens[1:] if not t.isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
+                                descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
 
-                                    idx_um = -1
-                                    for idx, t in enumerate(partes_tokens):
-                                        if t.upper() in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}:
-                                            idx_um = idx
-                                            break
-                                    
-                                    if idx_um > 1:
-                                        descripcion = " ".join(partes_tokens[1:idx_um])
-                                    else:
-                                        descripcion = "ARTICULO FACTURADO"
-
-                                    if total_val > 0:
-                                        registros.append([
-                                            factura, fecha, cliente, nit, ciudad, vendedor,
-                                            limpiar_texto(codigo), limpiar_texto(descripcion),
-                                            limpiar_texto(unidad).upper(), cantidad_val,
-                                            precio_val, total_val, iva_porcentaje,
-                                            forma_pago, clasificar_tipo_venta(codigo)
-                                        ])
-                                except Exception:
-                                    continue
+                                if total_val > 0:
+                                    registros.append([
+                                        factura, fecha, cliente, nit, ciudad, vendedor,
+                                        codigo, descripcion, unidad, cantidad_val,
+                                        precio_val, total_val, iva_porcentaje,
+                                        forma_pago, clasificar_tipo_venta(codigo)
+                                    ])
+                            except Exception:
+                                continue
 
     if not registros:
-        raise ValueError("No se encontraron líneas de productos o servicios válidas en el documento.")
+        raise ValueError("No se pudieron extraer los ítems del PDF. Comprueba que el archivo tenga una estructura de factura o traslado válida.")
     return registros
 
 def obtener_informacion_duplicados(hoja, registros_pdf):
@@ -729,9 +716,9 @@ extras = [
 for col, (titulo, valor, color, nota) in zip(st.columns(4, gap="small"), extras):
     col.markdown(tarjeta_kpi(titulo, valor, color, nota), unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------
 # BLOQUE DE GRÁFICOS Y ANÁLISIS COMERCIAL
-# -----------------------------------------------------------------------------
+# ---------------------------------------------
 st.markdown('<div class="section-title">📈 Análisis comercial detallado</div>', unsafe_allow_html=True)
 
 c1, c2 = st.columns([2, 1])
