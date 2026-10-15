@@ -18,7 +18,7 @@ from PIL import Image
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
 # -----------------------------------------------------------------------------
-LOGO_RESPALDO = "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"
+LOGO_RESPALDO = "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"
 
 
 def _logo_b64():
@@ -96,10 +96,6 @@ st.markdown("""
 .sr .t i { display:block; height:100%; border-radius:6px; }
 .sr .v { font-weight:700; color:#1C2363; white-space:nowrap; text-align:right; }
 #MainMenu, footer { visibility:hidden; }
-
-/* Ocultar elementos predeterminados de Streamlit */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,7 +116,8 @@ COLUMNAS = [
 MESES_PDF = {
     "JAN": "01", "FEB": "02", "MAR": "03", "APR": "04",
     "MAY": "05", "JUN": "06", "JUL": "07", "AUG": "08",
-    "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"
+    "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12",
+    "AGO": "08", "OCT": "10"
 }
 
 CODIGOS_SERVICIO = {"888912", "888923", "888916"}
@@ -163,9 +160,6 @@ def convertir_numero(valor):
                      if len(partes[-1]) <= 2 else texto.replace(",", ""))
         elif "." in texto:
             partes = texto.split(".")
-            # Un punto seguido de 1 o 2 dígitos representa decimales
-            # (por ejemplo, 0.5 o 47.5). Con 3 dígitos representa miles
-            # (por ejemplo, 12.170).
             texto = texto if len(partes[-1]) <= 2 else texto.replace(".", "")
         return float(texto)
     except Exception:
@@ -176,7 +170,8 @@ def convertir_fecha_pdf(fecha):
     if len(partes) != 3:
         return ""
     try:
-        mes = MESES_PDF.get(partes[1].upper(), partes[1])
+        mes_str = partes[1].upper()
+        mes = MESES_PDF.get(mes_str, mes_str)
         return datetime.strptime(
             f"{partes[0]}-{mes}-{partes[2].zfill(2)}", "%Y-%m-%d"
         ).strftime("%Y-%m-%d")
@@ -192,55 +187,155 @@ def extraer_datos_pdf(archivo_pdf):
     if not contenido:
         raise ValueError("El archivo PDF está vacío.")
 
-    patron_linea = re.compile(
-        r"^\s*\|?\s*(\d{3,10})\s+(.+?)\s+"
-        r"(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s+"
-        r"(MTS|KLS|UND|UN|KG|KGM|SERV|UNIDAD)\s+"
-        r"([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)"
-        r"\s*\*?\|?\s*$", re.I | re.M
-    )
-
     with pdfplumber.open(io.BytesIO(contenido)) as pdf:
         for pagina in pdf.pages:
             texto = (pagina.extract_text() or "").replace("−", "-").replace("–", "-")
             if not texto.strip():
                 continue
 
-            factura_match = re.search(r"Numero\s*:\s*([A-Z]+-\d+)", texto, re.I)
-            factura_match = factura_match or re.search(r"\b(FM-\d+)\b", texto, re.I)
-            if not factura_match:
-                continue
+            # Detectar si es un Traslado (TR) o una Factura de Venta (FM)
+            es_traslado = "TR" in texto.upper() or "TRANSFERENCIA" in texto.upper()
 
-            factura = factura_match.group(1).upper()
-            fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
-            cliente_match = re.search(r"Cliente\s*:\s*(.*?)\s*\|", texto, re.I)
-            nit_match = re.search(r"Nit\s+o\s+C\.C\.\s*:\s*([0-9.\-]+)", texto, re.I)
-            ciudad_match = re.search(r"Ciudad\s*:\s*([A-ZÁÉÍÓÚÑ ]+)", texto, re.I)
-            vendedor_match = re.search(r"Vendedor\s*:\s*(?:\d+\s+)?(.*?)\s*\|", texto, re.I)
-            pago_match = re.search(r"\|\s*(CREDITO\s+\d+\s+DIAS?|CONTADO)\s*\|", texto, re.I)
-
-            fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
-            cliente = limpiar_texto(cliente_match.group(1)) if cliente_match else ""
-            nit = limpiar_nit(nit_match.group(1)) if nit_match else ""
-            ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else ""
-            vendedor = limpiar_texto(vendedor_match.group(1)) if vendedor_match else ""
-            forma_pago = limpiar_texto(pago_match.group(1)) if pago_match else ""
-
-            for linea in patron_linea.findall(texto):
-                codigo, descripcion, piezas, cantidad, unidad, precio, descuento, total, iva = linea
-                total = convertir_numero(total)
-                if not codigo or total == 0:
+            if es_traslado:
+                doc_match = re.search(r"Numero\s*:\s*([0-9\-TR]+)", texto, re.I)
+                doc_match = doc_match or re.search(r"\b(\d{3}-TR-\d+)\b", texto, re.I)
+                if not doc_match:
                     continue
-                registros.append([
-                    factura, fecha, cliente, nit, ciudad, vendedor,
-                    limpiar_texto(codigo), limpiar_texto(descripcion),
-                    limpiar_texto(unidad).upper(), convertir_numero(cantidad),
-                    convertir_numero(precio), total, convertir_numero(iva),
-                    forma_pago, clasificar_tipo_venta(codigo)
-                ])
+                factura = doc_match.group(1).upper()
+
+                fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
+                fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
+
+                cliente = "Bellatela SAS"
+                nit = "800138082"
+                ciudad_match = re.search(r"Local\.\s*Destino\s*:\s*[0-9\-]+\s*(.*?)(?:\n|$)", texto, re.I)
+                ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else "INTERNO"
+                vendedor = "WAGNER GIRALDO PAOLA ANDREA"
+                forma_pago = "Contado"
+
+                patron_filas_tr = re.findall(
+                    r"(\d{10,15})\s+([A-ZÁÉÍÓÚÑ0-9\-\s]+?)\s+(\d{10,15})\s*\|\s*([\d.,]+)\s*([A-Z]{2,4})\s+([\d.,]+)\s+S\s*([\d.,]+)\s*\|\s*([\d.,]+)",
+                    texto
+                )
+                if not patron_filas_tr:
+                    patron_filas_tr = re.findall(
+                        r"(\d{10,15})\s+([A-ZÁÉÍÓÚÑ0-9\-\s]+?)\s+([\d.,]+)\s+(?:MTS|UND|KG)\s+([\d.,]+)\s+([\d.,]+)",
+                        texto
+                    )
+
+                for row in patron_filas_tr:
+                    if len(row) >= 8:
+                        codigo, descripcion, _, _, unidad, cantidad, _, total = row[:8]
+                    elif len(row) >= 5:
+                        codigo, descripcion, cantidad, _, total = row[:5]
+                        unidad = "MTS"
+                    else:
+                        continue
+
+                    descripcion = limpiar_texto(descripcion)
+                    cantidad_val = convertir_numero(cantidad)
+                    total_val = convertir_numero(total)
+                    if cantidad_val == 0 or total_val == 0:
+                        continue
+
+                    es_crudo = "CRUDO" in descripcion.upper()
+                    if es_crudo:
+                        registros.append([
+                            factura, fecha, cliente, nit, ciudad, vendedor,
+                            limpiar_texto(codigo), f"Base: {descripcion}", limpiar_texto(unidad).upper(),
+                            cantidad_val, total_val / cantidad_val, total_val, 0.0,
+                            forma_pago, "Bases Textiles"
+                        ])
+                    else:
+                        valor_sublimacion = 5000.0 * cantidad_val
+                        valor_base_restante = max(0.0, total_val - valor_sublimacion)
+                        registros.append([
+                            factura, fecha, cliente, nit, ciudad, vendedor,
+                            limpiar_texto(codigo), f"Sublimación: {descripcion}", limpiar_texto(unidad).upper(),
+                            cantidad_val, 5000.0, valor_sublimacion, 0.0,
+                            forma_pago, "Servicio"
+                        ])
+                        precio_base = valor_base_restante / cantidad_val if cantidad_val > 0 else 0.0
+                        registros.append([
+                            factura, fecha, cliente, nit, ciudad, vendedor,
+                            limpiar_texto(codigo), f"Base: {descripcion}", limpiar_texto(unidad).upper(),
+                            cantidad_val, precio_base, valor_base_restante, 0.0,
+                            forma_pago, "Bases Textiles"
+                        ])
+            else:
+                # -------------------------------------------------------------
+                # EXTRACCIÓN FLEXIBLE Y ROBUSTA PARA FACTURAS DE VENTA (FM)
+                # -------------------------------------------------------------
+                factura_match = re.search(r"Numero\s*:\s*(?:[A-Za-z]+\s*:\s*)?([A-Z]+-\d+)", texto, re.I)
+                factura_match = factura_match or re.search(r"\b(FM-\d+)\b", texto, re.I)
+                if not factura_match:
+                    continue
+                factura = factura_match.group(1).upper()
+
+                fecha_match = re.search(r"Fecha\s*:\s*(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
+                fecha = convertir_fecha_pdf(fecha_match.group(1)) if fecha_match else ""
+
+                cliente_match = re.search(r"Cliente\s*[:]?\s*(.*?)(?:\n|Establecim|Nit|Direccion|$)", texto, re.I)
+                cliente = limpiar_texto(cliente_match.group(1)) if cliente_match else "CLIENTE GENERAL"
+
+                nit_match = re.search(r"(?:Nit\s+o\s+C\.C\.|Nit)\s*[:]?\s*([0-9.\-]+)", texto, re.I)
+                nit = limpiar_nit(nit_match.group(1)) if nit_match else "0"
+
+                ciudad_match = re.search(r"Ciudad\s*[:]?\s*([A-ZÁÉÍÓÚÑ ]+)", texto, re.I)
+                ciudad = limpiar_texto(ciudad_match.group(1)) if ciudad_match else "CALI"
+
+                vendedor_match = re.search(r"Vendedor\s*[:]?\s*(?:[0-9]+\s+)?(.*?)(?:\n|OC\.Nro|$)", texto, re.I)
+                vendedor = limpiar_texto(vendedor_match.group(1)) if vendedor_match else ""
+
+                pago_match = re.search(r"(CREDITO\s+\d+\s+DIAS?|CONTADO)", texto, re.I)
+                forma_pago = limpiar_texto(pago_match.group(1)) if pago_match else "CONTADO"
+
+                iva_match = re.search(r"Iva%|19\.00", texto)
+                iva_porcentaje = 19.0 if iva_match else 0.0
+
+                patron_linea_universal = re.compile(
+                    r"^\s*(\d{5,10})\s+(.+?)\s+"
+                    r"(?:[\d.,]+\s+)?"
+                    r"([\d.,]+)\s+"
+                    r"(MTS|KLS|UND|UN|KG|KGM|SERV|UNIDAD)\s+"
+                    r"([\d.,]+)\s+"
+                    r"(?:[\d.,]+\s+)?"
+                    r"([\d.,]+)"
+                    r".*$", re.I | re.M
+                )
+
+                lineas_detectadas = patron_linea_universal.findall(texto)
+                
+                if not lineas_detectadas:
+                    lineas_texto = texto.split("\n")
+                    for linea in lineas_texto:
+                        match_alt = re.search(r"(\d{6,8})\s+(.+?)\s+([\d.,]+)\s+(MTS|KLS|UND|UN|KG)\s+([\d.,]+)\s+([\d.,]+)", linea, re.I)
+                        if match_alt:
+                            codigo, desc, cant, um, precio, total = match_alt.groups()
+                            lineas_detectadas.append((codigo, desc, cant, um, precio, "0.00", total))
+
+                for linea in lineas_detectadas:
+                    if len(linea) >= 7:
+                        codigo, descripcion, cantidad, unidad, precio, _, total = linea[:7]
+                    elif len(linea) >= 6:
+                        codigo, descripcion, cantidad, unidad, precio, total = linea[:6]
+                    else:
+                        continue
+
+                    total_val = convertir_numero(total)
+                    if not codigo or total_val == 0:
+                        continue
+
+                    registros.append([
+                        factura, fecha, cliente, nit, ciudad, vendedor,
+                        limpiar_texto(codigo), limpiar_texto(descripcion),
+                        limpiar_texto(unidad).upper(), convertir_numero(cantidad),
+                        convertir_numero(precio), total_val, iva_porcentaje,
+                        forma_pago, clasificar_tipo_venta(codigo)
+                    ])
 
     if not registros:
-        raise ValueError("No se encontraron líneas de productos o servicios.")
+        raise ValueError("No se encontraron líneas de productos o servicios válidas.")
     return registros
 
 def obtener_informacion_duplicados(hoja, registros_pdf):
@@ -320,7 +415,7 @@ if "uploader_version" not in st.session_state:
 col_izq, col_der = st.columns([8, 1])
 with col_izq:
     st.markdown("""
-        <div class="main-title">Cuadro de Ventas Magic Print</div>
+        <div class="main-title">Magic Print Analytics</div>
         <div class="main-subtitle">Seguimiento de ventas, facturación y desempeño comercial</div>
     """, unsafe_allow_html=True)
 with col_der:
@@ -348,7 +443,7 @@ else:
     estado_carga = "Aún no hay facturas registradas en la base de datos"
 
 with st.sidebar:
-    st.subheader("📤 Cargar facturas PDF")
+    st.subheader("📤 Cargar facturas / TR")
     st.markdown(f'<div class="data-status">{estado_carga}</div>', unsafe_allow_html=True)
     archivo_pdf = st.file_uploader(
         "Selecciona un archivo PDF",
@@ -359,11 +454,11 @@ with st.sidebar:
         st.success(f"Archivo seleccionado: {archivo_pdf.name}")
         if st.button("Procesar PDF", type="primary", use_container_width=True):
             try:
-                with st.spinner("Procesando el PDF..."):
+                with st.spinner("Procesando el documento..."):
                     st.session_state["registros_pdf"] = extraer_datos_pdf(archivo_pdf)
                 st.rerun()
             except Exception as error:
-                st.error("El PDF no corresponde a una factura válida o está vacío.")
+                st.error(f"El documento no es válido o está vacío: {error}")
 
 with st.container(border=True):
     st.subheader("🔍 Filtros de análisis")
@@ -433,9 +528,9 @@ st.markdown(
 # -----------------------------------------------------------------------------
 registros_pdf = st.session_state["registros_pdf"]
 if registros_pdf:
-    st.markdown('<div class="section-title">📦 Vista previa del PDF</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📦 Vista previa del documento</div>', unsafe_allow_html=True)
     df_pdf = pd.DataFrame(registros_pdf, columns=COLUMNAS)
-    st.caption(f"Se encontraron {len(df_pdf)} líneas de {df_pdf['Factura #'].nunique()} facturas.")
+    st.caption(f"Se encontraron {len(df_pdf)} líneas en el documento.")
     st.dataframe(df_pdf, use_container_width=True, hide_index=True)
 
     informacion = obtener_informacion_duplicados(hoja, registros_pdf)
@@ -443,12 +538,12 @@ if registros_pdf:
     nuevas = sorted(informacion["facturas_nuevas"])
 
     if repetidas:
-        st.warning(f"El PDF contiene {len(repetidas)} facturas ya cargadas.")
+        st.warning(f"El documento contiene {len(repetidas)} registros ya cargados.")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Facturas repetidas", len(repetidas))
-        c2.metric("Líneas repetidas", len(informacion["filas_a_borrar"]))
-        c3.metric("Facturas nuevas", len(nuevas))
-        with st.expander("Ver facturas repetidas"):
+        c1.metric("Registros repetidos", len(repetidas))
+        c2.metric("Líneas a reemplazar", len(informacion["filas_a_borrar"]))
+        c3.metric("Nuevos", len(nuevas))
+        with st.expander("Ver repetidos"):
             st.write(", ".join(repetidas))
 
         if st.button("No cargar este archivo", key="cancelar_archivo_repetido", use_container_width=True):
@@ -456,39 +551,39 @@ if registros_pdf:
             st.session_state["uploader_version"] += 1
             st.rerun()
 
-        confirmar = st.checkbox("Confirmo que deseo reemplazar las facturas repetidas.")
+        confirmar = st.checkbox("Confirmo que deseo reemplazar los registros repetidos.")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("Cargar solo facturas nuevas", disabled=not nuevas, use_container_width=True):
+            if st.button("Cargar solo nuevos", disabled=not nuevas, use_container_width=True):
                 try:
-                    with st.spinner("Cargando facturas nuevas..."):
+                    with st.spinner("Cargando nuevos..."):
                         agregar_facturas_nuevas(hoja, registros_pdf, informacion["facturas_existentes"])
                     st.cache_data.clear()
                     st.session_state["registros_pdf"] = None
-                    st.session_state["mensaje_carga"] = f"Se cargaron {len(nuevas)} facturas nuevas correctamente."
+                    st.session_state["mensaje_carga"] = "Registros nuevos cargados correctamente."
                     st.rerun()
                 except Exception as error:
                     st.error(f"Error: {error}")
         with c2:
-            if st.button("Reemplazar facturas repetidas", type="primary", disabled=not confirmar, use_container_width=True):
+            if st.button("Reemplazar repetidos", type="primary", disabled=not confirmar, use_container_width=True):
                 try:
-                    with st.spinner("Reemplazando facturas repetidas..."):
+                    with st.spinner("Reemplazando..."):
                         reemplazar_facturas(hoja, registros_pdf, informacion["filas_a_borrar"])
                     st.cache_data.clear()
                     st.session_state["registros_pdf"] = None
-                    st.session_state["mensaje_carga"] = f"Se reemplazaron {len(repetidas)} facturas correctamente."
+                    st.session_state["mensaje_carga"] = "Registros reemplazados correctamente."
                     st.rerun()
                 except Exception as error:
                     st.error(f"Error: {error}")
     else:
-        st.success("No se encontraron facturas repetidas. Todas son nuevas.")
-        if st.button("Cargar facturas en Google Sheets", type="primary", use_container_width=True):
+        st.success("No se encontraron registros repetidos. Todos son nuevos.")
+        if st.button("Cargar en Google Sheets", type="primary", use_container_width=True):
             try:
-                with st.spinner("Cargando facturas..."):
+                with st.spinner("Cargando..."):
                     hoja.append_rows(registros_pdf, value_input_option="USER_ENTERED")
                 st.cache_data.clear()
                 st.session_state["registros_pdf"] = None
-                st.session_state["mensaje_carga"] = "Las facturas fueron cargadas correctamente."
+                st.session_state["mensaje_carga"] = "Documento cargado correctamente."
                 st.rerun()
             except Exception as error:
                 st.error(f"Error: {error}")
@@ -556,7 +651,6 @@ def tarjeta(titulo, sub="", etiqueta=""):
 
 
 def filas(items, color=None):
-    """Lista con barras de color: nombre, barra y valor con porcentaje."""
     if not items:
         return '<p class="sub">Sin datos con los filtros seleccionados.</p>'
     mayor = max(v for _, v in items) or 1
