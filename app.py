@@ -18,7 +18,7 @@ from PIL import Image
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA Y ESTILOS VISUALES (UI/UX)
 # -----------------------------------------------------------------------------
-LOGO_RESPALDO = "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"
+LOGO_RESPALDO = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcYGRkZDxIbHRsYHRYYGRj/2wBDAQQEBAYFBgsGBgsYEA0QGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCACwALADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDxdiNpqI9KlYfKahbpX26dz+jauxG3SonqVulRPVo4qhC9RmpHqM1aOKoRSVC1TScc1C1XE5p7ELdTUT1K3U1E9WjhmQvUL1M9QvVI4qmxC1RPURqiorWKCVqkepn6CoWqkcVQh1qCSon6VK3SqNx2qiD3NvuGoT0qZuuKgevn0j+haiBuqonqVuoqJ+taAcVSF6jNSPUZq0cVQiEqaiK1K1QvVpjiqEJUb1K9RPVR45kJSoT0qVuoqJ+tXE5KiIWFRP0qVupqJ+lUccyFupqJ+lSt1qF+laocFTIWFRP0qVuoqJ+tUcVSBuqNulSt1qNulaiOCmQt0qFqmbpUT9KtHIUIeKY1T0wqM1onY5qkWZreCeMwzQxujdVdQwP4GoP7J0n/AKBtr/35X/CrT1Ez1qx8VPH3iL4f3WjSaDY6dPFqEs6XBu0clAiIQAVccZY0ua0W0Jq6sc9/ZOk/wDQNtf+/K/4Uf2VpH/QNtf+/K/4V6H4p+IuuaL8RfCHhvT7LTrq08QCzM80kbiRPOnMbgEOBwBn61t3XxK1z/hf9r8P7CyzYXFk8lxMLd2aKZYy4O/dhVO0A8ZzWfPK3NbpcerdvI8p/srSP+gba/8Aflf8KP7K0j/oG2v/AH5X/CvUPib8SPEvg3x7oOjaDZ6bPb6nEkkr3SOXUmTaQm1hgEd67vX/AIu+IfCXxH0nwxquh6dc22rPEltdw70O3fscsCxyygjIB704yclypby0XmdU6TjGUn0Vzwn+ytI/6Btr/AN+V/wAKP7K0j/oG2v8A35X/AAr07XPib4gsPixp3gmw03S7iG8uIYWvXicMpkbaSuHwSPpXX+NvjB4m8I+JbPQdO0jSruS5dIftF1K8cY3sFUEq4IyeOtdHtFa/kcbqU403PZaHzl/ZOk/8Dtr/AN+VpDplgoJ+wW3H/TKvSvip8Qr74eatpemWOlWN3dXkElzLJc7j8qsoCgKR3brWj4h+I2veG/hdoviy/wBP0+S71VwsNuqP5SIM8uN2T09Rya4a9ZVZRhTjdp2b8h1aEqUHUqO0VufM39qWef+PSDx/zyphvrXP8Ax6Q//IVbXw0+JWqePvF+r6Pe6ZptuNMgMqNbCQM5DhcHLn1rpfjX8StW8BatoNrpGn6ZcR6krNKbpHYrgqPlw4x1rphjIyrvDuPvJX/p3OKlS9pQddP3V/wADb8jzL7dZnP8Ax6Qdf+mVAvoT/wAukH/fC17z4p+K/ifQ/AHhrxHZ6bptxc6vMJbiKWNwkQ25wGDc8+tY2v/FTxLpXwjsfG1ppmmvd3c4je1dJPKTOeVO4E9PWiGJUqbpqHvJ2fyJhh5upGk5LlbtdvNdjyD7fbZ/49IOP+mVAvrf8/wDp0H/fKvevjj4m1jw58QfCNpoGq3Wm3l4k7SSW0pQuFdNgOOo5PSuR1z4p+N9P+LOm+G7fxHfJpdzcRRyRNIWJUvhyXPIwOetY0686keaEd20vVJnVWwvsKjhVl8Kau+6uvI4r+3Lf/AJ9IOP8AzlqrNqdtJGR9jg/77evYvF3xR8WaB8ebLwnpuoJDpE1zZRSW4hQs4l2bzuxuB5PQ1k6x8UPG1n8ftL8M2utSrpE13aJJalEIKSbd4ztzzycZrSFaTjGSh8Tv8jxMtxNPE06s5VHJU24va97Xtb01vY8vTU7ZTzYw/jI1KmpW7dfstuc+sn/167b4r/FHxL4N+IV5omhX1vaafbRRlEaCNyWYAsWZlJ6njmkaVqkG4xvbu2XUo04VPY1avvcvNtrb1a2+5HD3GoW5hcfYrccf32/wAa52fWbNWOLKAgnP3m/wAa9R1n4o+LtQ+GuneIri9tTpr3jRLGIIw7YXO7zCu4Y6AAjHrXK/FXxdrPi/X9PuddvRcSW1skceI0TCk852gf57Vph5SqSk+XWK2uTg8PRwsJ16tdPlcldO2qVtve6+hzcmoWxf/jygH4t/jTTqdsc/wCgQD/vtv8AGhvvCoX6V6sYxUUuXsfJzqVpTk/avVvW3e3kO/tW1P8AzD4P++m/xqN9St3kG7TrY445Zv8Aaf7tNPrTG6VUYw0sjnqVKs5XdaX3iPUbcZ/4l1sc8fef/GqP7StwMHSrU/V3/wAatScabpp1L+0jTlHl5j0J+Xw1O77tfmc0uqWvy5021OemA//AMVUzapbnZ/xLLfn2f8Axrqda0PTdY02ezvbeJopQRv2jI+h7GuC+Lni3WfB/g1NS0SeOG5a5SLdJEkgIIPQFSOw7Vxc/tlyr9T2sVgnluWyzTE1JKmlzW5uW65rWTTV3eyXnsbdvqtvJHn+zrb6fN/jTH1a2QnOm2//fTf415V8P8A4meI9b+IthY65qkbaddM0TxC1iiRTtJQ71UMOQBkk9a9S+KniDUPCvw91LWtMlSK8tpIfLd0DAM8qoflPB4Y1vONSpVVKMvspv0bPPw+XZdl+U4nMq+IlKlOdSFFp+97SMU1F6fDzNa3vbWxyvxM+Mvhv4Y6dBNqsM1xeXbFLaytsCSTaMscsQAB6k9+lc18Pfjt4N+Iusf2Tpy6hp9+4zbwX8aq02ACdrKzDI5PJ5xXxd4m8U6x4v1q51jW72W8vrl98krnOB2VR0CgDgDAFZ2kanfaPrFhqWnzNDe2k8c0EinsGByM9iDgjoc08Vha9bFT5Z+7ZJdNPv1Pvsh+EHuPMcI/Z1Kkq0pQnKSUuaXvczT0XKrWXRdG9xLhCrsueFOPzpldP8AEHwld+DfFVxp06kW7EyW0oPEkeTgj34ORXMFc13QkpxUl1Pz7GYepg688PU+KLsYmktUptObrWpy1Eiao3qV6ieqOOrsQvULdKlL9KieoOKpIjaomqRutROK0RxVNgL1qNqkev86jakcVTsZ1qT9ka5gjkjaNshkUjqD1xWf8A2VpH/QNtP+/K/wCFRt0qNjXQcVKq/Z/Zt67nfQreynhXh6fN13t0tbbrvubWl+D/AA5e+F7XWb3R7eWWSaRJDgoowwVeAT6H9KpeNvhzpHhrw/b6lp88zNPMImV5AwGKzPC+saZp/h7VtOvdRa0nupImjCRs+7G4HgA8cn9Kq+KPE9hffh3pui6ddtd3FvOZZXwVRRzwM85yevH1rzquKlKpGEZWbteXo/8jmh7epRlWpuPL7zjHVq60u/l2NfaomqVvupURrpRxVH//Z"
 
 
 def _logo_b64():
@@ -195,11 +195,13 @@ def extraer_datos_pdf(archivo_pdf):
 
             es_traslado = "TR" in texto.upper() or "TRANSFERENCIA" in texto.upper()
 
+            # Búsqueda ultra flexible de factura
             factura_match = re.search(r"\b(FM-\d+)\b", texto, re.I)
             if not factura_match:
-                factura_match = re.search(r"Numero\s*[:]?\s*([A-Z0-9\-]+)", texto, re.I)
+                factura_match = re.search(r"(?:Numero|Factura|Doc)\s*[:]?\s*([A-Z0-9\-]+)", texto, re.I)
             factura = factura_match.group(1).upper() if factura_match else "FM-GENERAL"
 
+            # Búsqueda de fecha
             fecha_match = re.search(r"(\d{4}-\d{2}-\d{2})", texto)
             if not fecha_match:
                 fecha_match = re.search(r"(\d{4}-[A-Z]{3}-\d{2})", texto, re.I)
@@ -223,35 +225,44 @@ def extraer_datos_pdf(archivo_pdf):
             iva_match = re.search(r"Iva%|19\.00", texto)
             iva_porcentaje = 19.0 if iva_match else 0.0
 
+            # Extracción extremadamente tolerante línea por línea
             lineas_texto = texto.split("\n")
             for linea in lineas_texto:
                 linea_clean = limpiar_texto(linea)
                 tokens = linea_clean.split()
-                if len(tokens) >= 3:
-                    ultimo = convertir_numero(tokens[-1])
-                    if ultimo > 0 and (any(u in linea_clean.upper() for u in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]) or len(tokens) >= 4):
-                        codigo = tokens[0] if tokens[0].isdigit() and len(tokens[0]) >= 4 else "100000"
-                        total_val = ultimo
-                        precio_val = convertir_numero(tokens[-3]) if len(tokens) >= 4 else total_val
-                        cantidad_val = convertir_numero(tokens[-4]) if len(tokens) >= 5 else 1.0
-                        if cantidad_val == 0:
+                # Si la línea tiene al menos un número al final (que representa un valor total)
+                if len(tokens) >= 2:
+                    ultimo_str = tokens[-1].replace("$", "").replace(".", "").replace(",", "")
+                    if ultimo_str.isdigit():
+                        total_val = convertir_numero(tokens[-1])
+                        if total_val > 0:
+                            # Intentar extraer código y descripción
+                            codigo = tokens[0] if tokens[0].isdigit() and len(tokens[0]) >= 3 else "100000"
+                            precio_val = convertir_numero(tokens[-2]) if len(tokens) >= 3 else total_val
                             cantidad_val = 1.0
+                            
+                            # Buscar si hay una cantidad numérica intermedia
+                            for t in tokens[1:-1]:
+                                num_test = convertir_numero(t)
+                                if 0 < num_test < 10000 and not t.isdigit() and len(t) <= 6:
+                                    cantidad_val = num_test
+                                    break
 
-                        unidad = "MTS"
-                        for u_test in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
-                            if u_test in linea_clean.upper():
-                                unidad = u_test
-                                break
+                            unidad = "MTS"
+                            for u_test in ["MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"]:
+                                if u_test in linea_clean.upper():
+                                    unidad = u_test
+                                    break
 
-                        desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
-                        descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
+                            desc_tokens = [t for t in tokens[1:] if not t.replace('.', '', 1).isdigit() and t.upper() not in {"MTS", "KLS", "UND", "UN", "KG", "KGM", "SERV", "UNIDAD"}]
+                            descripcion = " ".join(desc_tokens) if desc_tokens else "ARTICULO FACTURADO"
 
-                        registros.append([
-                            factura, fecha, cliente, nit, ciudad, vendedor,
-                            codigo, descripcion, unidad, cantidad_val,
-                            precio_val, total_val, iva_porcentaje,
-                            forma_pago, clasificar_tipo_venta(codigo)
-                        ])
+                            registros.append([
+                                factura, fecha, cliente, nit, ciudad, vendedor,
+                                codigo, descripcion, unidad, cantidad_val,
+                                precio_val, total_val, iva_porcentaje,
+                                forma_pago, clasificar_tipo_venta(codigo)
+                            ])
 
     if not registros:
         raise ValueError("No se pudieron extraer los ítems del PDF. Comprueba que el archivo tenga una estructura válida.")
